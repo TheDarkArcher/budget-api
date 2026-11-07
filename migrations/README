@@ -1,0 +1,7 @@
+Alembic database migrations, written by hand as SQL with op.execute().
+
+Create a migration:  uv run alembic revision -m "Add payees table"
+Apply migrations:    uv run poe migrate
+
+The database URL comes from DATABASE_URL in the app's settings.
+Never edit a migration that has been committed; add a new one instead.

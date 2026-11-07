@@ -8,6 +8,10 @@
   - C) Continue with the request without changing the design document
 - If the design document is silent, ambiguous or conflicts with a request, ask before proceeding rather than guessing
 
+## Documentation
+
+- Whenever you edit a document that has `Last updated` information check if that date matches the current date and update it to match if it doesn't.
+
 ## Project Structure
 
 - The project uses an `app/` layout
@@ -37,6 +41,8 @@
 - Use the `logging` module. Don't use `print()` in app code.
 - Use `Decimal` for money and quantities, never `float`.
 - Match the naming, structure and comment density of the surrounding code. Don't add comments that restate the code.
+- Table aliases should be avoided when possible in SQL queries. When it is not possible to avoid Table Aliases clear verbose aliases should be used.
+- `!=` should be used over `<>` in SQL queries.
 
 ## Database
 

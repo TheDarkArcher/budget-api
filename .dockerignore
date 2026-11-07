@@ -1,0 +1,9 @@
+# Send only what the image needs to the build. Everything else, including
+# .env, .venv, .git, tests, docs, tmp and backups, stays out.
+*
+!pyproject.toml
+!uv.lock
+!alembic.ini
+!app/
+!migrations/
+**/__pycache__

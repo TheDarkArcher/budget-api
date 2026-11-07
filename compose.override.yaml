@@ -1,0 +1,18 @@
+# Development additions, merged automatically by `docker compose up`.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+
+  api:
+    command: ["uvicorn", "--factory", "app.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  migrate:
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro

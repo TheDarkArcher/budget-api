@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-06 |
+| **Last updated** | 2026-11-07 |
 
 ---
 
@@ -66,7 +66,7 @@ No frontend for using the API is provided as part of this project.
 ### 4.3 Items
 - An item is a reusable entry with: **name**, **item category**, **tags** (optional, many per item). Name uniqueness is defined in [Archiving and Deleting](#46-archiving-and-deleting).
 - An item has one or more **sizes**, each a separate entry with a **size** (number + unit, required), for example `500 g` or `2 L`. The same item can be bought in several sizes, and each line records the size it was bought in.
-- Units are a fixed list: **g, kg, ml, L, each, unit, pack**. `unit` is for things that have no real size.
+- Units are a fixed list: **g, kg, mL, L, each, unit, pack**. `unit` is for things that have no real size.
 
 ### 4.4 Categories
 - Transaction categories are user-editable and are either income or expense. Defaults: **Salary** (income), **Groceries**, **Rent**, **Bills** (expense).
@@ -199,7 +199,7 @@ erDiagram
 
 | Construct | Name | Description |
 |---|---|---|
-| `Enum` | `category_kind` | Whether a transaction category is `income` or `expense` |
+| `Enum` | `category_type` | Whether a transaction category is `income` or `expense` |
 | `Enum` | `size_unit` | The units an item size can use |
 | `Table` | `users` | Owners of all user data. One seeded row in Milestone 1 |
 | `Table` | `transaction_categories` | User's categories for transactions, each either income or expense |
@@ -213,6 +213,7 @@ erDiagram
 | `Table` | `transactions` | A user's dated transaction with a category, a payee and optional notes. Its total comes from its lines |
 | `Table` | `transaction_lines` | The lines of a transaction: an item size, quantity, line total, discount flag and optional notes |
 | `View` | `transaction_totals` | Each transaction with its total, the sum of its line totals |
+| `View` | `items_information` | Each item size with its item and item tags information |
 
 ### 7.2 Decisions
 - **Keys:** every table has a single-column primary key `id` of type **`uuid`**, defaulting to **`uuidv7()`** (time-ordered, so indexes stay compact). Composite primary keys are not used; pairs that must be unique get a `UNIQUE` constraint.
@@ -221,12 +222,13 @@ erDiagram
 - **Dates:** `DATE` for when a transaction happened; `TIMESTAMPTZ` for audit fields.
 - **Deleting:** `RESTRICT` on anything still referenced (archive it instead); `CASCADE` for a transaction's lines, an item's sizes, tag links and category links. Removing a category link is always allowed.
 - **Users:** can't be deleted while they own any data (`RESTRICT`). What account deletion should do is decided in Milestone 3.
-- **Names:** all names are `NOT NULL` and can't be blank: `CHECK (btrim(name) <> '')`.
+- **Names:** all names are `NOT NULL` and can't be blank: `CHECK (btrim(name) != '')`.
 - **Constraint names:** unique indexes and `CHECK` constraints are named explicitly (e.g. `payees_user_id_name_key`, `transaction_lines_quantity_positive`), so the API can map database errors to responses by name. A refused `RESTRICT` delete is reported by PostgreSQL as `restrict_violation` (SQLSTATE 23001), not `foreign_key_violation` (23503).
 - **At least one line per transaction:** enforced in the service layer, inside one database transaction. A deferred trigger can be added later.
 - **Item-category link rule:** every line's item category must be linked to the transaction's category. This is enforced in the service layer, in the same database transaction as the at-least-one-line rule. When it is checked is defined in [Categories](#44-categories). A trigger can be added later.
 - **Archiving:** uses a nullable `archived_at` timestamp.
-- **User matching:** a trigger on each table with links to other user-owned rows checks that every referenced row belongs to the same user. Single-column foreign keys still check that the referenced row exists.
+- **Immutable user ownership:** user ids in user-owned tables are made immutable to ensure that the ownership of the data can not change.
+- **User matching:** composite foreign keys are used for direct links between user-owned tables, while transitive links are trigger-enforced with single-column foreign keys to check that the referenced row exists.
 
 ---
 
@@ -253,7 +255,7 @@ Item responses include their `sizes`. `POST /items` takes `sizes` (at least one,
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/transactions` | Filters `from`, `to`, `transactionCategoryId`, `kind`; paging `page`, `pageSize`. Newest first. Rows include date, payee, category, total and line count |
+| GET | `/transactions` | Filters `from`, `to`, `transactionCategoryId`, `type`; paging `page`, `pageSize`. Newest first. Rows include date, payee, category, total and line count |
 | POST | `/transactions` | Transaction and lines saved together in one database transaction. 422 if there are no lines, or if a line's item category is not linked to the transaction category (one `errors` entry per offending line) |
 | GET | `/transactions/summary` | Same filters as the list; returns `incomeTotal`, `expenseTotal`, `net` |
 | GET | `/transactions/{id}` | Full transaction including lines |
@@ -288,7 +290,7 @@ POST /api/v1/transactions
   "notes": null,
   "lines": [
     { "itemSizeId": "0192f0c4-…", "quantity": "2", "lineTotal": "3.50", "isDiscounted": true, "notes": null },
-    { "itemSizeId": "0192f0c4-…", "quantity": "1.350", "lineTotal": "2.70", "isDiscounted": false, "notes": "loose" }
+    { "itemSizeId": "0192f0c4-…", "quantity": "1.35", "lineTotal": "2.70", "isDiscounted": false, "notes": "loose" }
   ]
 }
 ```
@@ -328,7 +330,7 @@ POST /api/v1/transactions
 ### 9.1 Testing (pytest)
 - **Service tests:** unit tests of the business rules in the service layer, with the data-access layer mocked so no database is needed. The rules they cover are defined in [Domain Rules](#4-domain-rules).
 - **API and integration tests:** run FastAPI's test client against a **real PostgreSQL 18** started by testcontainers, with Alembic migrations applied. Each test runs in an outer transaction that is rolled back. Service transactions run as savepoints inside it, so their commits are rolled back too.
-- **Database-constraint tests:** the user-matching triggers reject links to other users' data; CHECKs reject non-positive quantities and totals; case-insensitive uniqueness works.
+- **Database-constraint tests:** cover the rules the database itself enforces, as listed in [Decisions](#72-decisions).
 - **Migration round-trip test:** an upgrade to head, a downgrade to base, then another upgrade.
 
 ### 9.2 Tooling
@@ -415,6 +417,8 @@ POST /api/v1/transactions
 | Losing data | Backup and restore scripts, documented in the README |
 | Dependency on PostgreSQL 18 for `uuidv7()` | Compose image pinned to `postgres:18` |
 | Local-only shortcuts creep in and block deployment | Deployment-readiness rules in [Considerations for Deployment](#113-considerations-for-deployment), an environment-neutral `compose.yaml`, the CI image smoke test |
+| The triggers for transitive tables linking two user-owned tables are not re-checked when the owning row changes or is inserted later in the same transaction | The user id in user-owned tables are immutable preventing them from changing after the trigger has verified them |
+| User accounts need to be merged | Drop user id immutability and replace the triggers for transitive tables linking two user-owned tables with composite foreign keys |
 
 ---
 
