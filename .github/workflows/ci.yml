@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.5"
+          enable-cache: true
+
+      - name: Check linting, formatting and types
+        run: uv run --locked poe lint
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.5"
+          enable-cache: true
+
+      - name: Run the tests
+        run: uv run --locked poe test
+
+      - name: Warn about low coverage
+        run: |
+          total=$(uv run --locked coverage report --format=total --precision=2)
+          echo "Coverage: ${total}%"
+          if awk -v total="$total" 'BEGIN { exit !(total < 70) }'; then
+            echo "::warning::Coverage is ${total}%, below the 70% target"
+          fi
+
+  image:
+    name: Image
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The build label comes from `git describe`, which needs history and tags.
+      - name: Check out the code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.5"
+          enable-cache: true
+
+      # Docker image tags can't contain `+`, so they use `_` in its place.
+      - name: Compute the build label
+        id: label
+        run: |
+          label=$(uv run --locked poe build-label)
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+          echo "tag=${label//+/_}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the Docker image
+        env:
+          LABEL: ${{ steps.label.outputs.label }}
+          TAG: ${{ steps.label.outputs.tag }}
+        run: docker build --build-arg "APP_BUILD=$LABEL" --tag "budget-api:$TAG" .
+
+      # Compose would otherwise build its own images, so the image just built
+      # is tagged with the names it expects, and used with --no-build.
+      - name: Prepare the smoke test
+        env:
+          TAG: ${{ steps.label.outputs.tag }}
+        run: |
+          cp .env.example .env
+          docker tag "budget-api:$TAG" budget-api-api
+          docker tag "budget-api:$TAG" budget-api-migrate
+
+      # compose.yaml alone, without the development override.
+      - name: Smoke test the image
+        run: |
+          docker compose -f compose.yaml up --no-build --wait db
+          docker compose -f compose.yaml run --rm migrate
+          docker compose -f compose.yaml up --no-build --wait api
+          docker compose -f compose.yaml exec -T api python -c \
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).read().decode())"
+
+      - name: Show the container logs
+        if: failure()
+        run: docker compose -f compose.yaml logs --no-color

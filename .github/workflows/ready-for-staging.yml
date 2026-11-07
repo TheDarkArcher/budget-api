@@ -1,0 +1,19 @@
+name: Ready for staging
+
+# Marks commits that have landed on main. `staging` requires this check, so 
+# only commits from main can be promoted to them. It must stay in its own
+# workflow: a job skipped on pull requests would count as passing.
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  ready-for-staging:
+    name: Ready for staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record that the commit is on main and can be staged
+        run: echo "$GITHUB_SHA is on main and can be staged"
