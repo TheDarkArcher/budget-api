@@ -1,0 +1,19 @@
+name: Ready for production
+
+# Marks commits that have been promoted to staging. `production` requires this
+# check, so only commits from staging can be promoted to it. It must stay in
+# its own workflow: a job skipped on other branches would count as passing.
+on:
+  push:
+    branches: [staging]
+
+permissions: {}
+
+jobs:
+  ready-for-production:
+    name: Ready for production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record that the commit is on staging and can be released
+        run: echo "$GITHUB_SHA is on staging and can be released"
