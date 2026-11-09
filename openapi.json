@@ -58,6 +58,31 @@
           }
         }
       }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Me",
+        "description": "Return the user the request acts as.\n\nArgs:\n    user: The current user.\n\nReturns:\n    The current user's id and name.",
+        "operationId": "me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "The current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -171,6 +196,26 @@
         ],
         "title": "ReadinessResponse",
         "description": "Whether the app and each subsystem it depends on are ready."
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "UserResponse",
+        "description": "A user, as returned by the API."
       }
     }
   }
