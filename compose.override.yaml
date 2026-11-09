@@ -16,3 +16,4 @@ services:
     volumes:
       - ./app:/app/app:ro
       - ./migrations:/app/migrations:ro
+      - ./scripts/seed.py:/app/scripts/seed.py:ro
