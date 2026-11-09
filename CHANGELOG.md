@@ -21,5 +21,14 @@ Breaking changes are listed under their own **Breaking** heading.
 - Docker Compose setup with PostgreSQL 18 and a one-off `migrate` service.
 - Interactive API documentation at `/docs` and the OpenAPI schema at
   `/openapi.json`.
+- User provisioning: a new user is given the default transaction categories
+  (Salary, Groceries, Rent and Bills), item categories (Food & Drink,
+  Household, Personal Care and General / Other) and the links between them.
+- A dummy user that acts as the system's sole user until full user
+  management exists. It is provisioned with the default categories and
+  links.
+- Seeding of the dummy user: `docker compose run --rm migrate` seeds it after
+  upgrading the database, and `uv run poe seed` does the same outside Docker.
+  Seeding again leaves the existing dummy user unchanged.
 
 [Unreleased]: https://github.com/TheDarkArcher/budget-api/commits/main
