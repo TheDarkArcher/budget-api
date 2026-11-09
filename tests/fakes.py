@@ -7,6 +7,7 @@ from app.repositories.transaction_categories import (
     CategoryType,
     TransactionCategoryRepository,
 )
+from app.repositories.users import User, UserRepository
 
 
 class FakeItemCategoryRepository(ItemCategoryRepository):
@@ -40,3 +41,19 @@ class FakeTransactionCategoryRepository(TransactionCategoryRepository):
         self, transaction_category_id: UUID, item_category_id: UUID
     ) -> None:
         self.links.append((transaction_category_id, item_category_id))
+
+
+class FakeUserRepository(UserRepository):
+    """Keeps users in memory, by id."""
+
+    def __init__(self) -> None:
+        self.users: dict[UUID, User] = {}
+
+    def get(self, user_id: UUID) -> User | None:
+        return self.users.get(user_id)
+
+    def create(self, user_id: UUID, name: str) -> bool:
+        if user_id in self.users:
+            return False
+        self.users[user_id] = User(id=user_id, name=name)
+        return True

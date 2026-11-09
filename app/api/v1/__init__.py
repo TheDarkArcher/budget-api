@@ -1,5 +1,15 @@
-"""Version 1 of the API."""
+"""Version 1 of the API.
 
-from fastapi import APIRouter
+Every request resolves the current user first, whether or not its endpoint
+asks for the user.
+"""
 
-router = APIRouter(prefix="/api/v1")
+from fastapi import APIRouter, Depends
+
+from app.api.dependencies import get_current_user
+
+router = APIRouter(
+    prefix="/api/v1",
+    dependencies=[Depends(get_current_user)],
+    responses={403: {"description": "The current user is not authorised"}},
+)

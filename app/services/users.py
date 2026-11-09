@@ -7,6 +7,7 @@ from app.repositories.transaction_categories import (
     CategoryType,
     TransactionCategoryRepository,
 )
+from app.repositories.users import User, UserRepository
 
 DEFAULT_TRANSACTION_CATEGORIES: dict[str, CategoryType] = {
     "Salary": "income",
@@ -59,3 +60,16 @@ def provision_user(
             transaction_category_repo.link_item_category(
                 transaction_category_id, item_category_ids[item_category]
             )
+
+
+def get_user(user_repo: UserRepository, user_id: UUID) -> User | None:
+    """Find a user by id.
+
+    Args:
+        user_repo: The repository to look the user up in.
+        user_id: The id of the user to find.
+
+    Returns:
+        The user, or ``None`` if no user has that id.
+    """
+    return user_repo.get(user_id)

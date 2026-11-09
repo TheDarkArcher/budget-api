@@ -3,10 +3,15 @@
 from uuid import UUID
 
 import pytest
-from fakes import FakeItemCategoryRepository, FakeTransactionCategoryRepository
+from fakes import (
+    FakeItemCategoryRepository,
+    FakeTransactionCategoryRepository,
+    FakeUserRepository,
+)
 
+from app.repositories.users import User
 from app.services import users
-from app.services.users import provision_user
+from app.services.users import get_user, provision_user
 
 USER_ID = UUID("0192f0c4-0000-7000-8000-000000000001")
 
@@ -105,3 +110,14 @@ def test_default_links_only_use_default_categories() -> None:
     assert links.keys() == users.DEFAULT_TRANSACTION_CATEGORIES.keys()
     linked = {name for names in links.values() for name in names}
     assert linked <= set(users.DEFAULT_ITEM_CATEGORIES)
+
+
+def test_get_user_returns_the_user(fake_user_repo: FakeUserRepository) -> None:
+    fake_user_repo.create(USER_ID, "Someone")
+    assert get_user(fake_user_repo, USER_ID) == User(id=USER_ID, name="Someone")
+
+
+def test_get_user_returns_none_for_an_unknown_id(
+    fake_user_repo: FakeUserRepository,
+) -> None:
+    assert get_user(fake_user_repo, USER_ID) is None
