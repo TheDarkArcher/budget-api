@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY pyproject.toml uv.lock alembic.ini ./
 COPY app ./app
 COPY migrations ./migrations
+COPY scripts/seed.py ./scripts/seed.py
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 

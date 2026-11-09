@@ -6,4 +6,5 @@
 !alembic.ini
 !app/
 !migrations/
+!scripts/seed.py
 **/__pycache__

@@ -127,6 +127,10 @@ help = "Run Alembic, by default `upgrade head`; e.g. `poe migrate downgrade -1`"
 cmd = "alembic ${ALEMBIC_ARGS}"
 args = [{ name = "ALEMBIC_ARGS", positional = true, multiple = true, default = "upgrade head" }]
 
+[tool.poe.tasks.seed]
+help = "Create the dummy user and their default categories, unless they exist"
+cmd = "python scripts/seed.py"
+
 [tool.poe.tasks.dev]
 help = "Run the API locally with auto-reload, outside Docker"
 shell = "APP_BUILD=$(python scripts/build_label.py) uvicorn --factory app.main:create_app --reload --host 127.0.0.1 --port 8000"

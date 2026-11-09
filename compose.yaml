@@ -40,10 +40,17 @@ services:
 
   # One-off step, never part of `docker compose up`:
   # `docker compose run --rm migrate`, or pass Alembic arguments after it.
+  # After `upgrade head`, the default, it also seeds the dummy user. Other
+  # commands, including partial upgrades and `--sql`, don't seed, as the seed
+  # needs the latest schema in the database.
   migrate:
     <<: *app
     profiles: [tools]
-    entrypoint: ["alembic"]
+    entrypoint:
+      - sh
+      - -c
+      - 'alembic "$$@" && if [ "$$*" = "upgrade head" ]; then exec python scripts/seed.py; fi'
+      - migrate
     command: ["upgrade", "head"]
 
 volumes:
