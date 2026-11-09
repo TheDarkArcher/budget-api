@@ -33,5 +33,8 @@ Breaking changes are listed under their own **Breaking** heading.
 - Seeding of the dummy user: `docker compose run --rm migrate` seeds it after
   upgrading the database, and `uv run poe seed` does the same outside Docker.
   Seeding again leaves the existing dummy user unchanged.
+- `GET /api/v1/me`, which returns the current user's id and name. Every
+  request to `/api/v1` acts as the dummy user, and is refused with 403 if
+  the dummy user doesn't exist.
 
 [Unreleased]: https://github.com/TheDarkArcher/budget-api/commits/main
