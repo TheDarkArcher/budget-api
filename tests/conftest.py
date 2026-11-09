@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from fakes import FakeItemCategoryRepository, FakeTransactionCategoryRepository
+from fakes import (
+    FakeItemCategoryRepository,
+    FakeTransactionCategoryRepository,
+    FakeUserRepository,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine
@@ -102,3 +106,8 @@ def fake_item_category_repo() -> FakeItemCategoryRepository:
 @pytest.fixture
 def fake_transaction_category_repo() -> FakeTransactionCategoryRepository:
     return FakeTransactionCategoryRepository()
+
+
+@pytest.fixture
+def fake_user_repo() -> FakeUserRepository:
+    return FakeUserRepository()
