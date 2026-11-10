@@ -20,7 +20,10 @@ Breaking changes are listed under their own **Breaking** heading.
 - Configuration from environment variables, documented in `.env.example`.
 - Docker Compose setup with PostgreSQL 18 and a one-off `migrate` service.
 - Interactive API documentation at `/docs` and the OpenAPI schema at
-  `/openapi.json`.
+  `/openapi.json`. The served schema reports the running build's label as its
+  version, e.g. `0.1.0-dev.11+23e3a68`.
+- The OpenAPI schema committed as `openapi.json`, with the plain version, so
+  clients can generate their API types from it without running the API.
 - User provisioning: a new user is given the default transaction categories
   (Salary, Groceries, Rent and Bills), item categories (Food & Drink,
   Household, Personal Care and General / Other) and the links between them.
