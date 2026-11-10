@@ -132,8 +132,19 @@ The full rules are in the
 ## API documentation
 
 The interactive docs are served at `/docs`, and the OpenAPI schema at
-`/openapi.json`. *Coming in milestone 4:* a committed `openapi.json`, from
-which the frontend generates its API types.
+`/openapi.json`. The schema a running app serves reports its build label as
+the version.
+
+The schema is also committed as [`openapi.json`](openapi.json), with the
+plain version, so API changes show up in review and the frontend can
+generate its API types from it. After changing an endpoint or schema,
+re-export it and commit the result:
+
+```bash
+uv run poe export-openapi
+```
+
+The tests fail if the committed file no longer matches the app.
 
 ## AI usage
 

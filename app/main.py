@@ -11,6 +11,9 @@ from app.core.config import get_settings
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
+    The OpenAPI schema it serves reports the build label as its version when
+    one is set, so a running app's schema identifies its exact build.
+
     Returns:
         The configured FastAPI application.
 
@@ -18,7 +21,7 @@ def create_app() -> FastAPI:
         pydantic.ValidationError: If the settings are missing or invalid.
     """
     settings = get_settings()
-    app = FastAPI(title="Budget Tracker API", version=__version__)
+    app = FastAPI(title="Budget Tracker API", version=settings.app_build or __version__)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,

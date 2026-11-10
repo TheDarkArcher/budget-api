@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-10 |
+| **Last updated** | 2026-11-11 |
 
 ---
 
@@ -343,13 +343,14 @@ POST /api/v1/transactions
   - `dev`: runs the API locally with auto-reload, outside Docker.
   - `build-label`: prints the build label for the current commit.
   - `seed` (planned): seeds the default user's data.
-  - `export-openapi` (planned): exports `openapi.json`.
+  - `export-openapi`: exports `openapi.json`.
   - `backup` (planned): dumps the database to a timestamped file.
   - `restore` (planned): loads a chosen dump back into the database.
 
 ### 9.3 Continuous Integration
-- **Backend pipeline:** ruff → mypy → pytest → OpenAPI drift check → Docker image build → image smoke test.
+- **Backend pipeline:** ruff → mypy → pytest → Docker image build → image smoke test.
 - **Image smoke test:** the built image is started against PostgreSQL, the migrations run as a one-off step, and `/health/ready` must return 200, so local-only assumptions are caught before they reach a deployment.
+- **OpenAPI drift check:** carried out as part of the pytest test suite.
 - **Coverage:** pytest-cov reports it and never fails the build. CI raises a `::warning::` annotation when coverage is below **70%**.
 - **Pre-commit hooks:** none; checks run in CI only.
 
@@ -385,7 +386,7 @@ POST /api/v1/transactions
   | Promoted to `production` | `X.Y.Z`, from tag `vX.Y.Z` | `0.2.0` |
 
   - The image is built once per commit and promoted by adding tags, never rebuilt, so production runs the image that was verified on staging.
-  - The dev label is computed at build time from `git describe` (`uv run poe build-label`) and passed into the image as the `APP_BUILD` build argument; `/health` endpoints report it as `build` alongside `version`. Docker image tags can't contain `+`, so image tags use `_` in its place (e.g. `budget-api:0.2.0-dev.47_1a2b3c4`). `openapi.json` keeps the plain version so the drift check doesn't change on every commit.
+  - The dev label is computed at build time from `git describe` (`uv run poe build-label`) and passed into the image as the `APP_BUILD` build argument; `/health` endpoints report it as `build` alongside `version`. Docker image tags can't contain `+`, so image tags use `_` in its place (e.g. `budget-api:0.2.0-dev.47_1a2b3c4`). The committed `openapi.json` keeps the plain version so the drift check doesn't change on every commit, while the schema a running app serves at `/openapi.json` reports the build label as its version.
 - **Release process:**
   1. A `Release X.Y.Z` pull request on `main` sets the version in `pyproject.toml`, re-exports `openapi.json` and moves the changelog's `Unreleased` section under the new version and date.
   2. `main` is promoted to `staging` and the commit is tagged `vX.Y.Z-rc.N`. A fix found on staging goes to `main` and is promoted again as the next release candidate.

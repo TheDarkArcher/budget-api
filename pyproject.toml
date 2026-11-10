@@ -138,3 +138,7 @@ shell = "APP_BUILD=$(python scripts/build_label.py) uvicorn --factory app.main:c
 [tool.poe.tasks.build-label]
 help = "Print the build label for the current commit, e.g. 0.2.0-dev.47+1a2b3c4"
 cmd = "python scripts/build_label.py"
+
+[tool.poe.tasks.export-openapi]
+help = "Write the API's OpenAPI schema to openapi.json"
+cmd = "python scripts/export_openapi.py"
