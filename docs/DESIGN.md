@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-07 |
+| **Last updated** | 2026-11-10 |
 
 ---
 
@@ -116,7 +116,7 @@ flowchart LR
 - **App:** a stateless FastAPI server.
   - **Handlers:** parse requests and shape responses.
   - **Services:** hold business rules (line totals, the at-least-one-line rule, the at-least-one-size rule, the item-category link rule, archive/delete behaviour, user provisioning).
-  - **Data access:** runs hand-written SQL.
+  - **Data access:** runs hand-written SQL. Services depend on data-access interfaces, not on the SQL implementations, and are given the implementations by their caller; in the API layer, a FastAPI dependency builds them for each request. All the implementations used for one unit of work share a single connection, so the business rules in a service run in one database transaction.
   - **Current-user resolver:** runs in front of every request (the Milestone 1 stub).
 - **Database:** the single source of truth; schema managed with versioned migrations.
 - **Containers:** Docker Compose runs PostgreSQL and the backend, as described in [Local Development](#96-local-development).
@@ -328,7 +328,7 @@ POST /api/v1/transactions
 ## 9. Engineering Practice
 
 ### 9.1 Testing (pytest)
-- **Service tests:** unit tests of the business rules in the service layer, with the data-access layer mocked so no database is needed. The rules they cover are defined in [Domain Rules](#4-domain-rules).
+- **Service tests:** unit tests of the business rules in the service layer, with fake implementations of the data-access interfaces so no database is needed. The rules they cover are defined in [Domain Rules](#4-domain-rules).
 - **API and integration tests:** run FastAPI's test client against a **real PostgreSQL 18** started by testcontainers, with Alembic migrations applied. Each test runs in an outer transaction that is rolled back. Service transactions run as savepoints inside it, so their commits are rolled back too.
 - **Database-constraint tests:** cover the rules the database itself enforces, as listed in [Decisions](#72-decisions).
 - **Migration round-trip test:** an upgrade to head, a downgrade to base, then another upgrade.
