@@ -12,6 +12,9 @@ from sqlalchemy import Connection, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.dummy_user import DUMMY_USER_ID
+from app.repositories.item_categories import SQLItemCategoryRepository
+from app.repositories.transaction_categories import SQLTransactionCategoryRepository
+from app.repositories.users import SQLUserRepository
 
 EXPECTED_TRANSACTION_CATEGORIES = {
     ("Salary", "income"),
@@ -57,6 +60,14 @@ def rows(connection: Connection, sql: str) -> set[tuple[Any, ...]]:
     }
 
 
+def seed_on(connection: Connection) -> bool:
+    return seed.seed_dummy_user(
+        SQLUserRepository(connection),
+        SQLItemCategoryRepository(connection),
+        SQLTransactionCategoryRepository(connection),
+    )
+
+
 def dummy_user_data(connection: Connection) -> dict[str, set[tuple[Any, ...]]]:
     return {
         "user": rows(connection, "SELECT name FROM users WHERE id = :user"),
@@ -86,7 +97,7 @@ def savepoint_engine(connection: Connection, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_seeds_the_dummy_user_with_the_default_data(connection: Connection) -> None:
-    assert seed.seed_dummy_user(connection) is True
+    assert seed_on(connection) is True
     assert dummy_user_data(connection) == {
         "user": {("Dummy user",)},
         "transaction categories": EXPECTED_TRANSACTION_CATEGORIES,
@@ -96,9 +107,9 @@ def test_seeds_the_dummy_user_with_the_default_data(connection: Connection) -> N
 
 
 def test_seeding_again_changes_nothing(connection: Connection) -> None:
-    seed.seed_dummy_user(connection)
+    seed_on(connection)
     before = dummy_user_data(connection)
-    assert seed.seed_dummy_user(connection) is False
+    assert seed_on(connection) is False
     assert dummy_user_data(connection) == before
 
 
@@ -121,7 +132,9 @@ def test_a_failed_seed_leaves_nothing_behind(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    def fail(connection: Connection, user_id: object) -> None:
+    def fail(
+        item_category_repo: object, transaction_category_repo: object, user_id: object
+    ) -> None:
         raise SQLAlchemyError("provisioning failed")
 
     # Fails after the user has been inserted, in the same transaction.

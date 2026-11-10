@@ -2,10 +2,11 @@
 
 from uuid import UUID
 
-from sqlalchemy import Connection
-
-from app.repositories import item_categories, transaction_categories
-from app.repositories.transaction_categories import CategoryType
+from app.repositories.item_categories import ItemCategoryRepository
+from app.repositories.transaction_categories import (
+    CategoryType,
+    TransactionCategoryRepository,
+)
 
 DEFAULT_TRANSACTION_CATEGORIES: dict[str, CategoryType] = {
     "Salary": "income",
@@ -30,26 +31,31 @@ DEFAULT_CATEGORY_LINKS: dict[str, tuple[str, ...]] = {
 }
 
 
-def provision_user(connection: Connection, user_id: UUID) -> None:
+def provision_user(
+    item_category_repo: ItemCategoryRepository,
+    transaction_category_repo: TransactionCategoryRepository,
+    user_id: UUID,
+) -> None:
     """Create a new user's default categories and the links between them.
 
-    Runs on the caller's connection, so it is part of the caller's database
-    transaction: if anything fails, none of the defaults are kept.
+    Writes through the given repositories, so it is part of the database
+    transaction they share: if anything fails, none of the defaults are kept.
 
     Args:
-        connection: The connection to write the defaults on, inside a
-            transaction.
+        item_category_repo: The repository to create the item categories with.
+        transaction_category_repo: The repository to create the transaction
+            categories and their item category links with.
         user_id: The id of the user to provision, who must already exist.
     """
     item_category_ids = {
-        name: item_categories.insert(connection, user_id, name)
+        name: item_category_repo.create(user_id, name)
         for name in DEFAULT_ITEM_CATEGORIES
     }
     for name, category_type in DEFAULT_TRANSACTION_CATEGORIES.items():
-        transaction_category_id = transaction_categories.insert(
-            connection, user_id, name, category_type
+        transaction_category_id = transaction_category_repo.create(
+            user_id, name, category_type
         )
         for item_category in DEFAULT_CATEGORY_LINKS[name]:
-            transaction_categories.link_item_category(
-                connection, transaction_category_id, item_category_ids[item_category]
+            transaction_category_repo.link_item_category(
+                transaction_category_id, item_category_ids[item_category]
             )

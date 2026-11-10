@@ -1,4 +1,4 @@
-"""Shared fixtures: a Postgres 18 container, migrations and a test client."""
+"""Shared fixtures: Postgres container, migrations, test client and fakes."""
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fakes import FakeItemCategoryRepository, FakeTransactionCategoryRepository
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine
@@ -91,3 +92,13 @@ def app(connection: Connection) -> FastAPI:
 def client(app: FastAPI) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def fake_item_category_repo() -> FakeItemCategoryRepository:
+    return FakeItemCategoryRepository()
+
+
+@pytest.fixture
+def fake_transaction_category_repo() -> FakeTransactionCategoryRepository:
+    return FakeTransactionCategoryRepository()

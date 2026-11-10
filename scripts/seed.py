@@ -10,31 +10,46 @@ Either way the exit status is 1.
 import logging
 import sys
 
-from sqlalchemy import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.database.engine import get_engine
-from app.repositories import users
+from app.repositories.item_categories import (
+    ItemCategoryRepository,
+    SQLItemCategoryRepository,
+)
+from app.repositories.transaction_categories import (
+    SQLTransactionCategoryRepository,
+    TransactionCategoryRepository,
+)
+from app.repositories.users import SQLUserRepository, UserRepository
 from app.services.users import provision_user
 
 logger = logging.getLogger(__name__)
 
 
-def seed_dummy_user(connection: Connection) -> bool:
+def seed_dummy_user(
+    user_repo: UserRepository,
+    item_category_repo: ItemCategoryRepository,
+    transaction_category_repo: TransactionCategoryRepository,
+) -> bool:
     """Create the dummy user and their defaults, unless the user exists.
 
     Args:
-        connection: The connection to write on, inside a transaction.
+        user_repo: The repository to create the dummy user with.
+        item_category_repo: The repository to create the default item
+            categories with.
+        transaction_category_repo: The repository to create the default
+            transaction categories and their item category links with.
 
     Returns:
         ``True`` if the dummy user was created, ``False`` if they already
         existed.
     """
-    if not users.insert(connection, DUMMY_USER_ID, DUMMY_USER_NAME):
+    if not user_repo.create(DUMMY_USER_ID, DUMMY_USER_NAME):
         return False
-    provision_user(connection, DUMMY_USER_ID)
+    provision_user(item_category_repo, transaction_category_repo, DUMMY_USER_ID)
     return True
 
 
@@ -47,7 +62,12 @@ def main() -> int:
     """
     try:
         with get_engine().begin() as connection:
-            created = seed_dummy_user(connection)
+            user_repo = SQLUserRepository(connection)
+            item_category_repo = SQLItemCategoryRepository(connection)
+            transaction_category_repo = SQLTransactionCategoryRepository(connection)
+            created = seed_dummy_user(
+                user_repo, item_category_repo, transaction_category_repo
+            )
     except SQLAlchemyError:
         logger.exception("Seeding failed; nothing was changed")
         return 1
