@@ -46,7 +46,7 @@ No frontend for using the API is provided as part of this project.
 | **Milestone 3** | User system | Registration, login, sessions or tokens, authorisation checks on every resource. Replaces the Milestone 1 stub |
 | **Milestone 4** | CSV import & advanced analysis | CSV upload, column mapping, preview, duplicate detection; trends, forecasting, unusual-spending detection. Both share the same Python data libraries (pandas and similar) |
 
-**User system skeleton (Milestone 1):** a `users` table exists and every user-owned table carries `user_id`. Every query is scoped to the current user, who is resolved by a single function. In Milestone 1 that function always returns one seeded default user; there is no login. In Milestone 3 that one function is replaced with real authentication and nothing else needs to change.
+**User system skeleton (Milestone 1):** a `users` table exists and every user-owned table carries `user_id`. Every query is scoped to the current user, who is resolved by a single function. In Milestone 1 that function always returns one seeded dummy user; there is no login. In Milestone 3 that one function is replaced with real authentication and nothing else needs to change.
 
 ---
 
@@ -96,7 +96,7 @@ No frontend for using the API is provided as part of this project.
 - Names of transaction categories, item categories, payees, items and tags are unique per user (ignoring case) including archived records, so you unarchive rather than create a duplicate. An item's sizes are unique within that item.
 
 ### 4.7 Users (Skeleton)
-- Each user only ever sees their own data. In Milestone 1 every request is scoped to the single default user.
+- Each user only ever sees their own data. In Milestone 1 every request is scoped to the single dummy user.
 
 ---
 
@@ -342,7 +342,7 @@ POST /api/v1/transactions
   - `migrate`: runs Alembic, by default `upgrade head`.
   - `dev`: runs the API locally with auto-reload, outside Docker.
   - `build-label`: prints the build label for the current commit.
-  - `seed` (planned): seeds the default user's data.
+  - `seed`: seeds the dummy user's data.
   - `export-openapi`: exports `openapi.json`.
   - `backup` (planned): dumps the database to a timestamped file.
   - `restore` (planned): loads a chosen dump back into the database.
@@ -399,7 +399,7 @@ POST /api/v1/transactions
 - **Docker Compose:** `docker compose up` starts **postgres:18** (data in a named volume) and the **backend with auto-reload**.
 - **Configuration:** `.env` values, as described in [Architecture](#5-architecture).
 - **Migrations:** a command runs them.
-- **Seeding:** `provision_user()` creates a user's default transaction categories, item categories and the links between them. The Milestone 1 seed script calls it for the default user; Milestone 3 registration reuses it.
+- **Seeding:** `provision_user()` creates a user's default transaction categories, item categories and the links between them. The Milestone 1 seed script calls it for the dummy user; Milestone 3 registration reuses it.
 
 ### 9.7 Backups
 - **Backup (planned):** `uv run poe backup` runs `pg_dump -Fc` and writes `backups/db_backup_<timestamp>.dump`. The `backups/` folder is git-ignored. The timestamp uses the ISO 8601 basic format (`yyyymmddTHHMMSS`).
