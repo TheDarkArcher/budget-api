@@ -75,6 +75,8 @@
 ## Git
 
 - Don't commit or push unless asked.
+- Commit messages must be approved by the maintainer before they are committed, unless they follow one of the approved patterns below. This only covers the message; still commit only when asked.
+  - `Update changelog for X`, where X names what the new entries cover, with no body other than the `Co-Authored-By` trailer, for commits that only change `CHANGELOG.md`. The subject-line rules below still apply.
 - Never bump the version, create or move tags, edit released changelog sections, or push to `staging` or `production` unless asked. Branching and release rules are in the "Git workflow" and "Versioning" sections of `docs/DESIGN.md`.
 - Limit the subject line to 50 characters or less
 - Capitalize the subject line

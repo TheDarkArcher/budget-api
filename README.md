@@ -1,13 +1,12 @@
 # Budget Tracker API
 
-Budget Tracker is a web app that gives you a clear picture of where your
-money goes. It records income and expenses, organises them into categories,
-and shows how spending changes over time.
+Budget Tracker API is a web backend API that gives you a clear picture of
+where your money goes. It records income and expenses, organises them into
+categories, and shows how spending changes over time.
 
-This repository is the backend: the REST API and its PostgreSQL database.
-The frontend lives in a separate repository *(link once it exists)*. Goals,
-architecture, data model and roadmap are in the
-[design document](docs/DESIGN.md).
+This repository holds the REST API and its PostgreSQL database. No frontend
+for using the API is provided as part of this project. Goals, architecture,
+data model and roadmap are in the [design document](docs/DESIGN.md).
 
 ## Prerequisites
 
@@ -22,7 +21,9 @@ docker compose up -d
 docker compose run --rm migrate
 ```
 
-The API is now at <http://localhost:8000>:
+The last command applies the database migrations and then seeds the dummy
+user, as described in [Seeding](#seeding). The API is now at
+<http://localhost:8000>:
 
 - <http://localhost:8000/docs> shows the interactive API docs.
 - <http://localhost:8000/health/ready> should return `"status": "ok"`.
@@ -36,8 +37,8 @@ All settings are environment variables, read from `.env`.
 [`.env.example`](.env.example) lists every one with a comment explaining it.
 
 If port 5432 is already in use on your machine (for example by a local
-PostgreSQL install), set `POSTGRES_HOST_PORT` to a free port such as `5433`,
-and use the same port in `DATABASE_URL`.
+PostgreSQL install), set `POSTGRES_HOST_PORT` to a free port such as `5433`.
+`DATABASE_URL` in `.env` follows it.
 
 ## Running the API without Docker
 
@@ -47,6 +48,7 @@ The database still runs in Docker; the API runs directly on your machine:
 uv sync
 docker compose up -d db
 uv run poe migrate
+uv run poe seed
 uv run poe dev
 ```
 
@@ -77,11 +79,28 @@ uv run poe migrate downgrade -1                 # undo the last one
 
 Inside Docker, `docker compose run --rm migrate` does the same, using the
 API image. Pass Alembic arguments after it, e.g.
-`docker compose run --rm migrate downgrade -1`. Migrations never run when
-the API starts.
+`docker compose run --rm migrate downgrade -1`. When the arguments are
+exactly `upgrade head`, the default, it then seeds the dummy user (see
+[Seeding](#seeding)); `uv run poe migrate` never seeds. Migrations never
+run when the API starts.
 
 A migration that has been committed should not be edited and a new one
 should be added instead.
+
+## Seeding
+
+Until user management exists, all budgeting data belongs to a single dummy
+user. Seeding creates that user with the default transaction categories,
+item categories and the links between them.
+
+```bash
+uv run poe migrate   # the database must be migrated first
+uv run poe seed      # create the dummy user, unless they already exist
+```
+
+Inside Docker, `docker compose run --rm migrate` does both, as described in
+[Database migrations](#database-migrations). Seeding again leaves an
+existing dummy user unchanged.
 
 ## Health checks
 
@@ -102,12 +121,12 @@ APP_BUILD=$(uv run poe -q build-label) docker compose up -d --build
 app/
   api/            HTTP endpoints
   services/       business rules
-  repositories/   SQL for reading and writing data
+  repositories/   data storage interfaces and their implementations
   database/       database connections
   schemas/        request and response models
-  core/           settings shared by every layer
+  core/           settings and constants shared by every layer
 migrations/       Alembic database migrations
-scripts/          utility scripts, e.g. the build label
+scripts/          utility scripts
 tests/            test suite
 docs/             design document
 ```
@@ -123,11 +142,12 @@ docs/             design document
   `1.0.0` are pre-release, and the API isn't stable until `1.0.0`.
 
 The full rules are in the
-[design document, §9](docs/DESIGN.md#9-engineering-practice).
+[Engineering Practice](docs/DESIGN.md#9-engineering-practice) section of the
+design document.
 
 ## Backups
 
-*Coming in milestone 2:* backup and restore commands for the database.
+*Coming later in Milestone 1:* backup and restore commands for the database.
 
 ## API documentation
 
@@ -136,7 +156,7 @@ The interactive docs are served at `/docs`, and the OpenAPI schema at
 the version.
 
 The schema is also committed as [`openapi.json`](openapi.json), with the
-plain version, so API changes show up in review and the frontend can
+plain version, so API changes show up in review and a frontend can
 generate its API types from it. After changing an endpoint or schema,
 re-export it and commit the result:
 
@@ -153,10 +173,11 @@ This project is developed with the help of an AI coding assistant,
 
 - **What AI is used for:** drafting code, tests, configuration and
   documentation, and reviewing changes against the design document.
-- **Human oversight:** every change is proposed, reviewed and approved by
-  the maintainer before it is made, and nothing is committed without the
-  maintainer's review. Design decisions are made by the maintainer and
-  recorded in the [design document](docs/DESIGN.md).
+- **Human oversight:** changes are made at the maintainer's request, and the
+  maintainer reviews every change before it is committed. Commit messages
+  are approved by the maintainer or follow an approved pattern. Design
+  decisions are made by the maintainer and recorded in the
+  [design document](docs/DESIGN.md).
 - **Attribution:** commits written by an AI agent carry a `Co-Authored-By`
   trailer naming the model. Commits written by the maintainer don't.
 - **Instructions for AI tools:** `AGENTS.md`, and `CLAUDE.md`, which points
