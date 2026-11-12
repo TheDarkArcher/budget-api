@@ -147,7 +147,36 @@ design document.
 
 ## Backups
 
-*Coming later in Milestone 1:* backup and restore commands for the database.
+Back up the database regularly, and before anything risky such as an
+upgrade:
+
+```bash
+uv run poe backup                     # dump the database into backups/
+uv run poe restore backups/<file>     # restore a dump
+```
+
+Both use PostgreSQL's tools in the `db` container, so it must be running
+(`docker compose up -d db`). Dumps are named by date and time, such as
+`db_backup_20261111T143000.dump`, and kept in the git-ignored `backups/`
+folder.
+
+A restore replaces the database the dump was taken from. It refuses if that
+database isn't empty (i.e. it has tables, functions, other schema objects
+or large objects in it) unless you add `--force`. It also refuses while
+anything is connected to the database, so stop the app first with
+`docker compose stop api`.
+
+An empty database, such as the one Docker Compose creates, is simply
+replaced, and recreated empty if the restore fails. One that isn't empty is
+set aside while restoring, and put back if the restore fails. If even that
+fails, the error names the database the original data was set aside in. A
+database named `<name>_before_restore_<timestamp>` holds the data from
+before a restore that didn't finish cleanly, or whose set-aside copy
+couldn't be dropped; drop it once you no longer need it.
+
+Dumps hold all of the data, so they're set to only be readable by the user
+that generated them. A restore runs the SQL inside the dump, so only restore
+dumps you trust.
 
 ## API documentation
 
