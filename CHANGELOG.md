@@ -36,5 +36,12 @@ Breaking changes are listed under their own **Breaking** heading.
 - `GET /api/v1/me`, which returns the current user's id and name. Every
   request to `/api/v1` acts as the dummy user, and is refused with 403 if
   the dummy user doesn't exist.
+- Database backups: `uv run poe backup` dumps the database to a timestamped
+  file in `backups/`. Dumps are readable only by their owner.
+- Database restores: `uv run poe restore <file>` restores a dump. A restore
+  refuses while anything is connected to the database. An empty database is
+  replaced without asking, and recreated empty if the restore fails. A
+  database that isn't empty is only replaced with `--force`, and is kept
+  until the restore succeeds.
 
 [Unreleased]: https://github.com/TheDarkArcher/budget-api/commits/main
