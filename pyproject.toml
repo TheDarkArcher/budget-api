@@ -142,3 +142,11 @@ cmd = "python scripts/build_label.py"
 [tool.poe.tasks.export-openapi]
 help = "Write the API's OpenAPI schema to openapi.json"
 cmd = "python scripts/export_openapi.py"
+
+[tool.poe.tasks.backup]
+help = "Back up the database to a timestamped dump in backups/"
+cmd = "python scripts/backups.py backup"
+
+[tool.poe.tasks.restore]
+help = "Restore a dump, e.g. `poe restore backups/<file>.dump`; add --force to replace data"
+cmd = "python scripts/backups.py restore"

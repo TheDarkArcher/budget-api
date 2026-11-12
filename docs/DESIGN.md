@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-11 |
+| **Last updated** | 2026-11-12 |
 
 ---
 
@@ -344,8 +344,8 @@ POST /api/v1/transactions
   - `build-label`: prints the build label for the current commit.
   - `seed`: seeds the dummy user's data.
   - `export-openapi`: exports `openapi.json`.
-  - `backup` (planned): dumps the database to a timestamped file.
-  - `restore` (planned): loads a chosen dump back into the database.
+  - `backup`: dumps the database to a timestamped file.
+  - `restore`: loads a chosen dump back into the database.
 
 ### 9.3 Continuous Integration
 - **Backend pipeline:** ruff → mypy → pytest → Docker image build → image smoke test.
@@ -402,9 +402,9 @@ POST /api/v1/transactions
 - **Seeding:** `provision_user()` creates a user's default transaction categories, item categories and the links between them. The Milestone 1 seed script calls it for the dummy user; Milestone 3 registration reuses it.
 
 ### 9.7 Backups
-- **Backup (planned):** `uv run poe backup` runs `pg_dump -Fc` and writes `backups/db_backup_<timestamp>.dump`. The `backups/` folder is git-ignored. The timestamp uses the ISO 8601 basic format (`yyyymmddTHHMMSS`).
-- **Restore (planned):** `uv run poe restore <file>` loads the named dump into the database. It refuses to overwrite an existing database unless `-f` or `--force` is given.
-- **Stopping the app:** recommended before a restore if the app is running.
+- **Backup:** `uv run poe backup` runs `pg_dump -Fc` and writes `backups/db_backup_<timestamp>.dump`. The `backups/` folder is git-ignored. The timestamp uses the ISO 8601 basic format (`yyyymmddTHHMMSS`).
+- **Restore:** `uv run poe restore <file>` loads the named dump into the database. It refuses to overwrite an existing database that isn't empty unless `-f` or `--force` is given. An existing database that isn't empty is set aside while restoring and put back if the restore fails; an empty one is dropped, and recreated empty if the restore fails.
+- **Stopping the app:** required before a restore; a restore refuses while anything is connected to the database.
 - **Documentation:** the README documents both and recommends backing up regularly.
 
 ---
