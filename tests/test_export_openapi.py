@@ -5,12 +5,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from export_openapi import OPENAPI_PATH, export, openapi_json
 from fastapi.testclient import TestClient
 
 from app import __version__
 from app.core.config import get_settings
 from app.main import create_app
+from export_openapi import OPENAPI_PATH, export, openapi_json
 
 BUILD_LABEL = "0.2.0-dev.47+1a2b3c4"
 

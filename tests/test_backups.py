@@ -11,8 +11,12 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
-import backups
 import pytest
+from sqlalchemy import Engine, create_engine, make_url, text
+from sqlalchemy.pool import NullPool
+from testcontainers.community.postgres import PostgresContainer
+
+import backups
 from backups import (
     DatabaseCommandError,
     RestoreError,
@@ -20,9 +24,6 @@ from backups import (
     main,
     restore,
 )
-from sqlalchemy import Engine, create_engine, make_url, text
-from sqlalchemy.pool import NullPool
-from testcontainers.community.postgres import PostgresContainer
 
 DATABASE = "backup_scratch"
 OLD_ASIDE = "backup_scratch_before_restore_20000101T000000"
