@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-import seed
 from sqlalchemy import Connection, text
 from sqlalchemy.exc import SQLAlchemyError
 
+import seed
 from app.core.dummy_user import DUMMY_USER_ID
 from app.repositories.item_categories import SQLItemCategoryRepository
 from app.repositories.transaction_categories import SQLTransactionCategoryRepository

@@ -33,6 +33,9 @@ module-root = ""
 
 [tool.ruff]
 line-length = 88
+# Mirrors pytest's pythonpath, so the script modules sort as first-party even
+# when a local folder of the same name (such as backups/) exists.
+src = [".", "scripts"]
 
 [tool.ruff.lint]
 select = [
