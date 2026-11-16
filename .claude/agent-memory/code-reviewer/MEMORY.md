@@ -1,0 +1,1 @@
+- [Scripts, subprocess and test conventions](project_scripts_subprocess_and_tests.md) — S603 noqa precedent, script test imports, cleanup pitfalls
