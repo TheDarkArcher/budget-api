@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews uncommitted and branch changes for quality and security. Use proactively after writing or modifying code, before committing, or when asked to review a diff. Read-only; reports findings without editing files.
+description: Reviews uncommitted and branch changes to code - application code, tests, migrations, scripts, hooks and config - for quality, security and consistency. Use proactively after writing or modifying code, before committing, or when asked to review a diff. Documentation is reviewed by the doc-reviewer agent. Read-only; reports findings without editing files.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 memory: project
@@ -23,13 +23,15 @@ git diff HEAD
 
 - If the user names a base branch or commit range, use `git diff <base>...HEAD` instead.
 - Untracked files (`??` in `git status`) do not appear in `git diff`; read them in full with Read.
-- If there are no changes, say so and stop.
+- Changed Markdown documents are the `doc-reviewer` agent's; read them only as context.
+- If no code changed, say so and stop.
 
 ## Step 2: Load the project rules
 
 Read `AGENTS.md` and the parts of `docs/DESIGN.md` that relate to the changed files
-(architecture in §4, data access in §5.3, data model in §6, API conventions in §7,
-engineering practice in §9). These are the standard you review against.
+("Domain Rules", "Architecture", "Data Access and Migrations", "Data Model",
+"API Design" and "Engineering Practice", found by their header text). These are the
+standard you review against.
 
 ## Step 3: Review the changed code
 
@@ -48,8 +50,11 @@ in untouched code unless a change makes them worse.
 
 ### Correctness
 - Money or quantities handled as `float` instead of `Decimal`
-- Business rules from DESIGN.md §3 broken (line totals, at-least-one-line, item-category link, archive/delete)
-- Wrong status codes or error shapes (RFC 9457 problem+json, see DESIGN.md §7)
+- Business rules from DESIGN.md Domain Rules that are broken or not enforced in the layer
+  their *Enforced in* note names; and, where a rule has a *Checked first in* note, not
+  checked in that earlier layer, so the client doesn't get a clear error
+- Wrong status codes or error shapes (RFC 9457 problem+json, see Conventions in
+  DESIGN.md API Design)
 - Broken layering: handlers in `app/api/` doing SQL, repositories holding business rules
 - Blocking I/O inside `async` functions
 - Migrations: edits to committed migrations, missing or broken `downgrade()`
