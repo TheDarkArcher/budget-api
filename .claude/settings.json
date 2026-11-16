@@ -9,6 +9,32 @@
             "if": "Bash(git *)",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-protected-branch-commit.sh\"",
             "statusMessage": "Checking the git command"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*env*)",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-secrets.sh\"",
+            "statusMessage": "Checking for secret files"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-secrets.sh\"",
+            "statusMessage": "Checking for secret files"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-committed-and-generated-files.sh\"",
+            "statusMessage": "Checking the file can be edited"
           }
         ]
       }
