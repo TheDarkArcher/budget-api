@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-15 |
+| **Last updated** | 2026-11-18 |
 
 ---
 
@@ -42,7 +42,7 @@ No frontend for using the API is provided as part of this project.
 | Milestone | Focus | Scope |
 |---|---|---|
 | **Milestone 1** | Foundation | Transactions with line items; item list; transaction categories, item categories, payees and tags; filtering and totals; user system skeleton; database backups |
-| **Milestone 2** | Reporting, analytics & budgets | Spending over time, category breakdowns, period comparisons, chart-ready aggregation, richer sorting and filtering; budgets per category and period with actual spending against each budget |
+| **Milestone 2** | Reporting, analytics & budgets | Spending over time, category breakdowns, period comparisons, chart-ready aggregation; richer sorting and filtering, including record and impact counts on lookup lists, most-used ordering and a fuller transaction list; manual line ordering; budgets per category and period with actual spending against each budget |
 | **Milestone 3** | User system | Registration, login, sessions or tokens, authorisation checks on every resource. Replaces the Milestone 1 stub |
 | **Milestone 4** | CSV import & advanced analysis | CSV upload, column mapping, preview, duplicate detection; trends, forecasting, unusual-spending detection. Both share the same Python data libraries (pandas and similar) |
 
@@ -59,24 +59,32 @@ Each rule ends with where it is enforced, using the layers in [Architecture](#5-
 - A transaction has at least one **line item**. *Enforced in: Services. Checked first in: HTTP handlers.*
 - Whether a transaction is income or an expense comes from its **category**. *Enforced in: Database.*
 - The **transaction total is the sum of its line totals**. It is never stored or entered directly. *Enforced in: Database.*
+- Totals over a set of transactions give the **income total**, the **expense total** and the **net**, which is income minus expense. *Enforced in: Data access.*
+- Transactions are listed newest first by date; transactions on the same date are listed most recently created first. *Enforced in: Data access.*
+- A transaction can be deleted, and its lines are deleted with it. *Enforced in: Database.*
 - Every line's item must belong to an **item category linked to the transaction's category**. *Enforced in: Services.*
 
 ### 4.2 Line Items
-- A line has an **item size** (the item and the size bought), a **quantity** (decimal, e.g. `1.35` kg), a **line total** (the amount paid for that line), whether it was **discounted** (yes/no) and optional **notes**. Quantity and line total are always positive. *Enforced in: Database. Checked first in: HTTP handlers.*
-- Lines are shown ordered by item category (default) or item name; there is no manual ordering. *Enforced in: Data access.*
+- A line has an **item size** (the item and the size bought), a **quantity** (decimal, e.g. `1.35` kg), a **line total** (the amount paid for that line), whether it was **discounted** (yes/no) and optional **notes**. *Enforced in: Database. Checked first in: HTTP handlers.*
+- A line kept when its transaction is edited stays the same line, even if its values change. *Enforced in: Services.*
+- Several lines of a transaction can use the same item size. *Enforced in: Database.*
+- Quantity is always positive, and has at most 12 digits, 3 of them decimal places. *Enforced in: Database. Checked first in: HTTP handlers.*
+- A line total is zero or more, so a free item can be recorded, and has at most 12 digits, 2 of them decimal places. *Enforced in: Database. Checked first in: HTTP handlers.*
+- Lines are shown ordered case-insensitively by item category, then item name (default), or by item name, with ties kept in the order the lines were added, and lines added together in the order they were given; manual ordering is planned to be part of Milestone 2 as shown in the [Version 1 Roadmap](#31-version-1-roadmap). *Enforced in: Data access.*
 
 ### 4.3 Items
 - An item is a reusable entry with a **name**, an **item category** and optional **tags** (many per item). Name uniqueness is defined in [Archiving and Deleting](#46-archiving-and-deleting). *Enforced in: Database. Checked first in: HTTP handlers.*
 - An item has one or more **sizes**, so the same item can be bought in several sizes, and an active item always has at least one active size. *Enforced in: Services. Checked first in: HTTP handlers.*
-- Each size is a separate entry with a positive number and a unit, for example `500 g` or `2 L`, and each line records the size it was bought in. *Enforced in: Database. Checked first in: HTTP handlers.*
-- Units are a fixed list: **g, kg, mL, L, each, unit, pack**. `unit` is for things that have no real size. *Enforced in: Database. Checked first in: HTTP handlers.*
+- Each size is a separate entry with a positive number, of at most 12 digits, 2 of them decimal places, and a unit, for example `500 g` or `2 L`. *Enforced in: Database. Checked first in: HTTP handlers.*
+- Units are a fixed list, in this order: **g, kg, mL, L, each, unit, pack**. `unit` is for things that have no real size. *Enforced in: Database. Checked first in: HTTP handlers.*
+- An item's sizes are listed by unit, in the order above, then by value. *Enforced in: Data access.*
 
 ### 4.4 Categories
 - Transaction categories are user-editable and are either income or expense. *Enforced in: Database. Checked first in: HTTP handlers.*
 - Whether a transaction category is income or expense can't be changed after it is created. *Enforced in: Database. Checked first in: Services.*
 - Item categories are a separate, user-editable list. *Enforced in: Database.*
 - Item categories are **linked to transaction categories**, many-to-many: one item category can be linked to several transaction categories, and users can edit the links. *Enforced in: Database.*
-- An item category is created and saved with at least one linked transaction category. It can be left with none when its linked transaction categories are archived or deleted. *Enforced in: Services. Checked first in: HTTP handlers.*
+- An item category is created and saved with at least one linked transaction category. It can be left with no active links when its linked transaction categories are archived, or with none when they are deleted. *Enforced in: Services. Checked first in: HTTP handlers.*
 - A new user is given default categories and links: transaction categories **Salary** (income), **Groceries**, **Rent** and **Bills** (expense), and item categories **Food & Drink**, **Household**, **Personal Care** and **General / Other**, linked as below. *Enforced in: Services.*
 
   | Transaction category | Linked item categories |
@@ -86,25 +94,28 @@ Each rule ends with where it is enforced, using the layers in [Architecture](#5-
   | Rent | General / Other |
   | Bills | Household, General / Other |
 
-- A transaction category with **no linked item categories cannot be used** on a transaction. *Enforced in: Services.*
-- Changing links does not affect past transactions. The rule is checked again only when an edited transaction is saved. *Enforced in: Services.*
-- Archived item categories keep their links, so unarchiving one brings back its links to active transaction categories. *Enforced in: Services.*
+- Changing links does not affect past transactions. When an edited transaction is saved, the [Transactions](#41-transactions) rule that every line's item category is linked to the transaction's category is checked again only for lines that are new or whose item size changed, or for every line if its transaction category changed. For that check, the links of an archived transaction category that the transaction already holds still count. *Enforced in: Services.*
+- Archiving either category leaves the links between them in place. A link applies only while both of its categories are active, apart from the edited-transaction case above, so it comes back once both are unarchived, in either order. *Enforced in: Services and Data access.*
 
 ### 4.5 Payees and Tags
 - Both are reusable lists per user. *Enforced in: Database.*
 
 ### 4.6 Archiving and Deleting
 - Transaction categories, item categories, payees, items and item sizes can be **archived** and **unarchived**. Tags are deleted instead. *Enforced in: Services.*
+- An archived record keeps the time it was archived, and unarchiving clears it. *Enforced in: Database.*
 - Archived records are hidden from lists by default but still appear on past transactions. *Enforced in: Data access.*
+- An archived record can't be newly used on a transaction. *Enforced in: Services.*
+- A transaction that already uses an archived transaction category, payee or item size keeps it when edited; an archived item size stays only on a line that keeps it, and only while the transaction's category is unchanged. *Enforced in: Services.*
 - Archived records can't be edited; they must be unarchived first. *Enforced in: Database. Checked first in: Services.*
-- Archiving cascades down from item categories to items to item sizes, and unarchiving restores what was archived with it. *Enforced in: Services.*
+- Links can't be added or removed while either of their categories is archived, except that deleting a category removes its links, as detailed below. *Enforced in: Database. Checked first in: Services.*
+- Archiving cascades down from item categories to items to item sizes, and unarchiving restores what was archived with it. Records archived by a cascade get the same archive time as the record that started the cascade. *Enforced in: Services.*
 - An item can't be created in, or unarchived while in, an archived item category. *Enforced in: Services.*
 - A size's value and unit never change; a different value or unit is a different size. *Enforced in: Database.*
 - A size used by a transaction line is never deleted. *Enforced in: Database. Checked first in: Services.*
 - Removing a size deletes it, or archives it if a transaction line uses it; changing a size removes it and adds the new one; adding a size that matches an archived one unarchives it. *Enforced in: Services.*
-- A record that is still referenced **cannot be deleted**; it must be archived instead. A record is referenced when something else uses it (a transaction, a line or an item). *Enforced in: Database.*
+- A record that is still referenced **cannot be deleted**; it must be archived instead. A record is referenced when something else uses it (a transaction, a line or an item); links, including a tag's links to items, don't count. *Enforced in: Database.*
 - An active transaction category can't be deleted while it is linked to an active item category. *Enforced in: Database. Checked first in: Services.*
-- Links don't block deleting an item category or a tag: deleting either removes its links. *Enforced in: Database.*
+- Apart from the rule above, links don't block a delete: deleting a transaction category, an item category or a tag removes its links. *Enforced in: Database.*
 - Names of transaction categories, item categories, payees, items and tags are unique per user (ignoring case). Archived records are included, so you unarchive rather than create a duplicate. An item's sizes are unique within that item. *Enforced in: Database.*
 
 ### 4.7 Users (Skeleton)
@@ -241,15 +252,15 @@ erDiagram
 - **Audit columns:** every table has `created_at` and `updated_at` (`TIMESTAMPTZ`). A `set_updated_at()` trigger on every table keeps `updated_at` current on each update, so no query can forget it.
 - **Money:** stored as `NUMERIC(12,2)`, never a float. PostgreSQL's `MONEY` type was rejected: its formatting and precision depend on the database's `lc_monetary` setting, it stores no currency, and drivers return it as formatted strings. Multi-currency support would add a `currency_code CHAR(3)` column later.
 - **Dates:** `DATE` for when a transaction happened; `TIMESTAMPTZ` for audit fields.
-- **Deleting:** `RESTRICT` on anything still referenced (archive it instead), including a transaction category's links to item categories; `CASCADE` for a transaction's lines, an item's sizes, tag links and an item category's links. Idempotency keys aren't owned data: they are removed with their user and never block deleting one.
+- **Deleting:** `RESTRICT` on anything still referenced (archive it instead); `CASCADE` for a transaction's lines, an item's sizes, tag links and both sides of a category link. A trigger refuses deleting an active transaction category while it is linked to an active item category, since its links would otherwise cascade away. Idempotency keys aren't owned data: they are removed with their user and never block deleting one.
 - **Users:** can't be deleted while they own any data (`RESTRICT`). What account deletion should do is decided in Milestone 3.
 - **Names:** all names are `NOT NULL` and can't be blank: `CHECK (btrim(name) != '')`.
 - **Constraint names:** unique indexes and `CHECK` constraints are named explicitly (e.g. `payees_user_id_name_key`, `transaction_lines_quantity_positive`), so the API can map database errors to responses by name. A refused `RESTRICT` delete is reported by PostgreSQL as `restrict_violation` (SQLSTATE 23001), not `foreign_key_violation` (23503).
-- **At least one line per transaction:** enforced in the service layer, inside one database transaction. A deferred trigger can be added later.
-- **Item-category link rule:** every line's item category must be linked to the transaction's category. This is enforced in the service layer, in the same database transaction as the at-least-one-line rule. When it is checked is defined in [Categories](#44-categories). A trigger can be added later.
+- **At least one line per transaction:** enforced in the service layer, inside one database transaction. A deferred trigger can be added later (see [Deferred Decisions](#111-deferred-decisions)).
+- **Item-category link rule:** every line's item category must be linked to the transaction's category. This is enforced in the service layer, in the same database transaction as the at-least-one-line rule. When it is checked is defined in [Categories](#44-categories). A trigger can be added later (see [Deferred Decisions](#111-deferred-decisions)).
 - **Archiving:** uses a nullable `archived_at` timestamp.
 - **Immutable user ownership:** user ids in user-owned tables are made immutable to ensure that the ownership of the data can not change.
-- **Immutable records:** triggers refuse changing a transaction category's type, any change to an archived record other than unarchiving it, changing an item size's value or unit, and moving an item size to another item.
+- **Immutable records:** triggers refuse changing a transaction category's type, any change to an archived record other than unarchiving it, changing an item size's value or unit, moving an item size to another item, and adding or removing a link while either of its categories is archived, except when a category itself is deleted.
 - **User matching:** composite foreign keys are used for direct links between user-owned tables, while transitive links are trigger-enforced with single-column foreign keys to check that the referenced row exists.
 
 ---
@@ -263,32 +274,38 @@ All endpoints sit under **`/api/v1`** and are scoped to the current user.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/{resource}` | Paged. `?q=` name search (contains, ignoring case); `?archived=false\|true\|all` (default `false`); `?sort=` and `?order=asc\|desc` (default name ascending) |
+| GET | `/{resource}` | Paged. `?q=` name search (contains, ignoring case; trimmed, and ignored when blank; at most 100 characters after trimming); `?archived=false\|true\|all` (default `false`); `?sort=` and `?order=asc\|desc` (default ordered case-insensitively by name, ascending, with ties broken by `id` in the same order) |
 | POST | `/{resource}` | Create. 409 if the name exists (archived records included) |
-| GET | `/{resource}/{id}` | One record |
+| GET | `/{resource}/{id}` | One record, archived or not |
 | PUT | `/{resource}/{id}` | Replace the record, including the links it owns. 409 if the name exists on a different record or the record is archived. `archivedAt` is ignored |
 | DELETE | `/{resource}/{id}` | 409 if still referenced |
 | POST | `/{resource}/{id}/archive` | Returns the record. Archiving an archived record changes nothing. Not for tags |
 | POST | `/{resource}/{id}/unarchive` | Returns the record. Unarchiving an active record changes nothing. Not for tags |
 
-- **Transaction categories:** `type` is set on create; a different `type` on PUT returns 422. Filter `?type=`.
-- **Item categories:** take `transactionCategoryIds` (at least one, otherwise 422) and return the linked `transactionCategories` that are active, so the list is empty if all of them are archived or deleted. Filter `?transactionCategoryId=`.
-- **Items:** take `itemCategoryId`, `tagIds` and `sizes` (at least one, otherwise 422), and return active sizes only. Filters `?itemCategoryId=`, `?transactionCategoryId=` and `?tagId=` (repeatable; matches items with every tag given). Sortable by name or item category. Unarchiving an item whose item category is archived returns 409.
-- **Item sizes:** managed through `sizes` on `POST /items` and `PUT /items/{id}`, and identified by their value and unit, following the size rules in [Archiving and Deleting](#46-archiving-and-deleting). `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt`, takes `?archived=` (default `false`) and isn't paged.
+- **Archive time:** each record except a tag has an `archivedAt` field holding its archive time (see [Archiving and Deleting](#46-archiving-and-deleting)), which is `null` while the record is active.
+- **Transaction categories:** `type` is set on create; a different `type` on PUT returns 422, except on an archived category, which returns 409 as any edit to an archived record does. Filter `?type=`.
+- **Item categories:** take `transactionCategoryIds` (at least one, otherwise 422) and return the linked `transactionCategories` that are active, whether or not the item category itself is archived, so the list is empty while all of them are archived or after they are deleted, and the item category can't be used on a transaction until one is unarchived or a PUT links another. Links to archived transaction categories are never listed, can't be changed by a PUT and stay in place; the `?transactionCategoryId=` filter finds the item categories that still have such links. Filter `?transactionCategoryId=`.
+- **Items:** take `itemCategoryId`, optional `tagIds` (left out means none) and `sizes` (at least one, otherwise 422), and return active sizes only, or for an archived item the sizes archived with it. Filters `?itemCategoryId=` and `?tagId=` (both repeatable: a repeated filter matches an item that has any one of the values given, and an item must satisfy every filter given) and `?transactionCategoryId=`. `?sort=` accepts `name` or `itemCategory` (ordered case-insensitively by item category name, then item name) on items, and only `name` on every other lookup. Unarchiving an item whose item category is archived returns 409.
+- **Item sizes:** managed through `sizes` on `POST /items` and `PUT /items/{id}`, and identified by their value and unit; a size's `id` and `archivedAt` in a request body are ignored. They follow the size rules in [Archiving and Deleting](#46-archiving-and-deleting). `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`, takes `?archived=false|true|all` (default `false`, so an archived item's sizes need `true` or `all`) and isn't paged, so `?archived=all` shows whether a size removed by PUT was archived or deleted.
 - **Tags:** deleted rather than archived, so they take no `?archived=` and have no `archivedAt`.
-- **References:** an unknown or archived id in a request body returns 422.
-- **Responses:** include `archivedAt`; related records are nested as objects with `id` and `name`, except sizes, which carry their `id`, value and unit.
+- **References:** an unknown or archived id in a request body returns 422, as does a repeated id or size.
+- **Filtering by transaction category:** on item categories and items, `?transactionCategoryId=` matches through the item category's links, including links that don't currently apply because either category is archived, so archived records can still be found by transaction category.
+- **Responses:** related records are nested as references: objects with `id`, `name` and `archivedAt`, and nested transaction categories also carry `type`. Sizes carry their `id`, value, unit and `archivedAt`, and tags only their `id` and `name`. Nested lists, such as an item's tags, are ordered case-insensitively by name, then `id`.
 
 ### 8.2 Transactions
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/transactions` | Filters `from`, `to`, `transactionCategoryId`, `type`; paging `page`, `pageSize`. Newest first. Rows include date, payee, category, total and line count |
-| POST | `/transactions` | Transaction and lines saved together in one database transaction. 422 if there are no lines, or if a line's item category is not linked to the transaction category (one `errors` entry per offending line) |
-| GET | `/transactions/summary` | Same filters as the list; returns `incomeTotal`, `expenseTotal`, `net` |
-| GET | `/transactions/{id}` | Full transaction including lines |
-| PUT | `/transactions/{id}` | Replaces the whole transaction, lines included. Same 422 rules as POST |
-| DELETE | `/transactions/{id}` | Lines are deleted with it |
+| GET | `/transactions` | Filters `from` and `to` (inclusive, on `occurredOn`), `transactionCategoryId`, `type`; paging `page`, `pageSize`. Rows hold `id`, `occurredOn`, `type`, `total`, `lineCount`, and `transactionCategory` and `payee` as nested references |
+| POST | `/transactions` | Transaction and lines saved together in one database transaction. 422 with `/problems/validation` if there are no lines, or with `/problems/item-category-not-linked` if a line's item category is not linked to the transaction category (one `errors` entry per offending line, naming both categories) |
+| GET | `/transactions/summary` | The list's filters, including `type`; returns `incomeTotal`, `expenseTotal`, `net` and `transactionCount` |
+| GET | `/transactions/{id}` | Full transaction including lines, ordered according to `?lineSort=itemCategory\|item` (default `itemCategory`) |
+| PUT | `/transactions/{id}` | Replaces the transaction. Lines are matched by `id`: a line with an `id` is updated, one without is added, and a saved line left out is deleted. Same 422 rules as POST, except for the link check on edits |
+| DELETE | `/transactions/{id}` | Deletes the transaction |
+
+- **Rules:** the list order, the summary's totals and deleting follow [Transactions (Domain Rules)](#41-transactions); `itemCategory` and `item` are the two line orders in [Line Items](#42-line-items); the link check on edits follows [Categories](#44-categories).
+- **Lines:** have an `id`, which stays the same across edits as [Line Items](#42-line-items) describes. A line `id` that isn't one of the transaction's lines gives 422 `/problems/invalid-reference`; a line `id` repeated in a PUT, or sent on POST, gives 422 `/problems/validation`. POST and PUT return lines in the default order. An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
+- **Archived references:** follow [Archiving and Deleting](#46-archiving-and-deleting); an archived one those rules don't allow gives 422 `/problems/invalid-reference` with an `errors` entry pointing at its line.
 
 ### 8.3 Other
 
@@ -322,6 +339,36 @@ POST /api/v1/transactions
 }
 ```
 
+The 201 response holds the full transaction, as `GET /transactions/{id}` returns it:
+
+```json
+{
+  "id": "0192f0c4-…",
+  "occurredOn": "2026-10-23",
+  "type": "expense",
+  "total": "6.20",
+  "transactionCategory": { "id": "0192f0c4-…", "name": "Groceries", "type": "expense", "archivedAt": null },
+  "payee": { "id": "0192f0c4-…", "name": "Corner Store", "archivedAt": null },
+  "notes": null,
+  "lines": [
+    {
+      "id": "0192f0c4-…",
+      "item": { "id": "0192f0c4-…", "name": "Apples", "archivedAt": null },
+      "itemCategory": { "id": "0192f0c4-…", "name": "Food & Drink", "archivedAt": null },
+      "itemSize": { "id": "0192f0c4-…", "value": "1", "unit": "kg", "archivedAt": null },
+      "quantity": "1.35", "lineTotal": "2.70", "isDiscounted": false, "notes": "loose"
+    },
+    {
+      "id": "0192f0c4-…",
+      "item": { "id": "0192f0c4-…", "name": "Milk", "archivedAt": null },
+      "itemCategory": { "id": "0192f0c4-…", "name": "Food & Drink", "archivedAt": null },
+      "itemSize": { "id": "0192f0c4-…", "value": "2", "unit": "L", "archivedAt": null },
+      "quantity": "2", "lineTotal": "3.50", "isDiscounted": true, "notes": null
+    }
+  ]
+}
+```
+
 ### 8.6 Paged List Response
 
 ```json
@@ -330,30 +377,61 @@ POST /api/v1/transactions
 
 ### 8.7 Conventions
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case (Pydantic `alias_generator=to_camel`, `populate_by_name=True`).
-- **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript.
+- **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript. Money always has 2 decimal places; quantities and size values drop trailing zeros, such as `"1.35"` and `"500"`. Requests may send any decimal string within the limits, such as `"3.5"` or `"500.0"`, and size values are compared as numbers, so `"500"` and `"500.0"` are the same size.
+- **Filters:** on any list, an unknown, another user's or archived id in a filter only narrows the result, and a `from` date after `to` returns an empty list.
+- **Query parameters:** a malformed id in a query parameter, a value outside a parameter's allowed values or limits, or a parameter not marked repeatable sent twice gives 422 with a `parameter` entry.
 - **Dates:** ISO-8601 (`2026-10-23`).
 - **Names:** trimmed of surrounding whitespace and 1–100 characters long.
-- **Paging:** paged endpoints accept `page` (default 1) and `pageSize` (default 25, maximum 200). A page past the end returns an empty `data` list.
+- **Notes:** transaction and line notes are at most 1000 characters long.
+- **Paging:** paged endpoints accept `page` (default 1, at least 1) and `pageSize` (default 25, from 1 to 200). A page past the end returns an empty `data` list, and an empty result has `totalPages` 0. To load a whole list, such as for a picker, a client requests each page in turn.
 - **Idempotency:** every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft, except that a repeat sent while the first request is still running waits for it rather than getting 409. A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
   - A repeat with the same key and the same request returns the original response again, without creating anything.
   - The same key with a different request gives 422.
   - Only successful creates are stored: a request that fails stores nothing, so it can be corrected and retried with the same key.
-- **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. When a status code has more than one meaning (409 and 422), `type` is a named relative URI such as `/problems/name-conflict` so clients can tell them apart; otherwise it is `about:blank`.
+- **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query, path or header parameter. When a status code has more than one meaning (409 and 422), `type` is one of the problem types below so clients can tell them apart; otherwise it is `about:blank`.
   - The exception is `GET /health/ready` (at the root, outside `/api/v1`): it returns the same health body for both 200 and 503, with any failing check marked, so monitors only read one shape.
+- **Problem types:**
+
+  | Type | Status | Used for |
+  |---|---|---|
+  | `/problems/name-conflict` | 409 | A name that exists on another record, archived records included. Carries the extension member `existing`, the clashing record as a [nested reference](#81-lookup-resources), and, for an item, the extension member `itemCategory` |
+  | `/problems/archived` | 409 | Editing an archived record |
+  | `/problems/parent-archived/item-category` | 409 | Unarchiving an item whose item category is archived. Carries the extension member `itemCategory`, as a [nested reference](#81-lookup-resources) |
+  | `/problems/in-use/transaction` | 409 | Deleting a transaction category, payee or item that a transaction uses, even when a transaction category is also linked to an active item category |
+  | `/problems/in-use/item-category` | 409 | Deleting an active transaction category linked to an active item category |
+  | `/problems/in-use/item` | 409 | Deleting an item category that items use, archived items included |
+  | `/problems/validation` | 422 | A request that is malformed or breaks a rule, including an invalid query parameter, a different `type` on an active transaction category's PUT, a repeated id or size in a lookup body, or a line `id` repeated in a PUT or sent on POST |
+  | `/problems/invalid-reference` | 422 | An unknown or archived id in a request body, including a line `id` that isn't one of the transaction's lines, or an archived item size kept on a line after the transaction category changes |
+  | `/problems/item-category-not-linked` | 422 | A transaction line whose item category isn't linked to the transaction category |
+  | `/problems/idempotency-key-mismatch` | 422 | An `Idempotency-Key` reused with a different request |
+
+- **Error order:** when a request has several problems, the first one found decides the response. They are checked in this order:
+  1. The current user (403).
+  2. Request validation, including the `Idempotency-Key` format (422, or 404 for a malformed path id).
+  3. On a create sent with an `Idempotency-Key`, a stored response (replayed, or 422 on a mismatch).
+  4. Finding the record (404).
+  5. Editing an archived record, or unarchiving an item whose item category is archived (409). So a PUT on an archived record that passes validation gives 409, whatever references or names its body holds.
+  6. A different `type` on a transaction category's PUT (422).
+  7. References (422).
+  8. The item category link rule (422).
+  9. Name and in-use conflicts (409).
 - **Status codes:**
 
   | Code | Used for |
   |---|---|
   | 200 | Successful read, update, archive or unarchive |
-  | 201 | Created, with a `Location` header |
+  | 201 | Created, with a `Location` header holding the new record's path, such as `/api/v1/payees/{id}` |
   | 204 | Successful delete |
-  | 404 | Not found, **including another user's records** (never reveals they exist) |
+  | 403 | No current user |
+  | 404 | Not found, **including another user's records** (never reveals they exist), or a malformed id in the path |
   | 409 | Duplicate name, record still in use, editing an archived record, or unarchiving an item whose item category is archived |
-  | 422 | Validation failure, including unknown or archived references and an `Idempotency-Key` reused with a different request |
+  | 422 | Validation failure, including unknown or archived references, a malformed or disallowed query parameter and an `Idempotency-Key` reused with a different request |
 
 ### 8.8 OpenAPI
 - FastAPI serves `/openapi.json` and interactive docs at `/docs`.
 - An exported **`openapi.json` is committed** to this repo; CI fails if it no longer matches the code.
+- Every operation has an explicit camelCase `operationId`, such as `getLiveness` or `listPayees`, so generated clients get readable method names.
+- Operation and field descriptions are written for clients, without docstring sections such as `Args:`.
 
 ---
 
@@ -464,7 +542,8 @@ POST /api/v1/transactions
 | Authentication approach: cookie sessions or tokens, password hashing, replacing the stub resolver | Milestone 3 |
 | Whether CSV imports and heavy analysis run inside the request or as background jobs | Milestone 4 |
 | Deployment target and pipeline behind the `staging` and `production` branches | Later |
-| Enforcing the at-least-one-line and item-category link rules with database triggers as well | Any time |
+| Enforcing these rules, which only services enforce today, with database triggers as well: at least one line per transaction, the item-category link rule ([Transactions](#41-transactions)), an active item keeping an active size ([Items](#43-items)), an item category being saved with a link ([Categories](#44-categories)), an archived record not being newly used on a transaction, and an item not being created in or unarchived into an archived item category ([Archiving and Deleting](#46-archiving-and-deleting)) | Any time |
+| Concurrency control for PUT, such as an ETag from `updated_at` checked with `If-Match`, so two clients can't overwrite each other's changes | When more than one client edits the same records |
 
 ### 11.2 Future Ideas
 - Refunds linked to the original transaction.
