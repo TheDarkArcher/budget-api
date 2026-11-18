@@ -1,0 +1,1 @@
+- [DESIGN vs checklist drift](recurring-design-checklist-drift.md) — check new DESIGN rules reach local checklists, the status table and absolute claims
