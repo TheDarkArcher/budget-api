@@ -1,6 +1,6 @@
 ---
 name: debugger
-description: Debugs errors, test failures and unexpected behaviour. Use proactively when a test fails, an exception or stack trace appears, or code behaves differently from what DESIGN.md says. Finds the root cause, makes a minimal fix, verifies it and adds a regression test.
+description: Debugs errors, test failures and unexpected behaviour. Use proactively when a test fails, an exception or stack trace appears, or code behaves differently from what DESIGN.md says. Finds the root cause, adds a regression test, makes a minimal fix and verifies it.
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 
@@ -43,7 +43,16 @@ that relate to the failing code. Their rules apply to every edit you make.
 - Remove any temporary debug logging before you finish. Never use `print()`
   in app code.
 
-## Step 4: Implement a minimal fix
+## Step 4: Add a regression test
+
+- Before applying the fix, write a test that reproduces the bug. Run it and
+  see it fail for the bug's reason; it must pass once the fix is in.
+- Put it in the existing test module for that code under `tests/`. Match the
+  surrounding tests' style, and keep the module order: constants, helper
+  classes, helper functions, fixtures, then tests.
+- Name it after the behaviour it protects, not after the bug.
+
+## Step 5: Implement a minimal fix
 
 - Fix the root cause, not the symptom. Change only what the bug needs; mention
   unrelated problems you notice instead of fixing them.
@@ -58,16 +67,6 @@ that relate to the failing code. Their rules apply to every edit you make.
   - add or change a dependency
   - skip, delete or weaken a test, or add `# type: ignore` or `# noqa`
   - conflict with DESIGN.md, or rely on something it doesn't cover
-
-## Step 5: Add a regression test
-
-- Write a test that fails without the fix and passes with it. Confirm it fails
-  first by checking it against the unfixed behaviour (for example by running
-  it before you apply the fix).
-- Put it in the existing test module for that code under `tests/`. Match the
-  surrounding tests' style, and keep the module order: constants, helper
-  classes, helper functions, fixtures, then tests.
-- Name it after the behaviour it protects, not after the bug.
 
 ## Step 6: Verify the fix
 

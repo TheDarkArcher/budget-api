@@ -52,12 +52,13 @@
 
 ## Tests
 
+- Write tests before the code they cover. For each change in behaviour, add or update a test, run it and see it fail for the expected reason, then write the code that makes it pass.
+- Refactors that keep behaviour need no new test, but the existing tests must still pass.
 - In test modules, order top-level code as: constants, helper classes, helper functions, fixtures, then tests.
 
 ## Quality Gates
 
-- While in the process of working on an issue, only the tests related to that issue should be run. Once the issue has been finished, the full test suite should be run.
-- Add or update tests for every change in behaviour.
+- While in the process of working on an issue, only the test files related to that issue should be run. Once the issue has been finished, the full test suite should be run.
 - Before a task is done, `ruff check`, `ruff format --check`, `mypy` (strict) and the full pytest suite must pass. Run them all with `uv run poe check`.
 - If an endpoint or schema changed, re-export `openapi.json` so the CI drift check passes.
 - Don't skip, delete or weaken tests, or add `# type: ignore` or `# noqa`, to get the gates passing without asking first. Fix the code instead, unless asked to change the tests.
