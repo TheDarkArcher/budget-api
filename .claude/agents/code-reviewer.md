@@ -71,7 +71,8 @@ in untouched code unless a change makes them worse.
 - `# type: ignore` or `# noqa` added
 - Hand edits to `uv.lock` or `openapi.json`
 - New dependencies not added through `uv add`
-- Missing or weakened tests for changed behaviour
+- Missing or weakened tests for changed behaviour that `docs/DESIGN.md` states
+- Tests that break the Tests section of `AGENTS.md` (behaviour the design hasn't decided, or another layer's work simulated); never suggest tests for behaviour the design hasn't decided
 - Comments that restate the code; naming that does not match the surrounding code
 
 Use Bash only for read-only commands (`git diff`, `git log`, `git show`, `git status`,

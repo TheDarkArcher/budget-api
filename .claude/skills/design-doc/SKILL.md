@@ -14,9 +14,9 @@ description: Conventions for writing and editing docs/DESIGN.md - level of detai
 
 ## Level of detail
 - Keep Domain Rules independent of the tech stack: state each rule in terms of the domain (lines, categories, items), not HTTP, query parameters, JSON fields or table names, apart from the layer names in the *Enforced in* notes. Those belong in API Design or Data Model.
-- Only design-level decisions belong in the document. Implementation details stay out: index mechanics, how a rule is stored, column types and internal bookkeeping such as link archiving.
-- The exception is a detail that is high-risk enough to be a design decision, such as money being `NUMERIC(12,2)`.
-- State rules in terms a client of the API can see. For example: "can't be deleted while linked to an active item category", rather than describing archived link rows.
+- Only design-level decisions belong in the document. Implementation details stay out: index mechanics, how a rule is stored and column types.
+- The exceptions are a detail that is high-risk enough to be a design decision, such as money being `NUMERIC(12,2)`, and database behaviour that tests depend on but Domain Rules doesn't state, such as a stored idempotency response being kept whole. Record that behaviour in Decisions (Data Model), linking to the Domain Rules bullet it supports where there is one. A rule with an effect a client can see goes in Domain Rules.
+- In Domain Rules and API Design, state rules in terms a client of the API can see. For example: "can't be deleted while linked to an active item category", rather than describing archived link rows.
 - The ER diagram defines which tables are user-owned; a table missing a `users` link there is not a gap.
 
 ## Domain rules
