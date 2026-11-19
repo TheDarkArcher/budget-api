@@ -51,6 +51,8 @@ that relate to the failing code. Their rules apply to every edit you make.
   surrounding tests' style, and keep the module order: constants, helper
   classes, helper functions, fixtures, then tests.
 - Name it after the behaviour it protects, not after the bug.
+- Mark it as a regression test, as the Regression tests entry in DESIGN.md's
+  Testing section describes.
 
 ## Step 5: Implement a minimal fix
 
