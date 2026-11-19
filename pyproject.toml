@@ -80,6 +80,7 @@ extraPaths = ["scripts"]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
+markers = ["regression: guards against a bug that was fixed"]
 xfail_strict = true
 filterwarnings = ["error"]
 

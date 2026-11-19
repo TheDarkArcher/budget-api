@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-18 |
+| **Last updated** | 2026-11-20 |
 
 ---
 
@@ -442,6 +442,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 - **API and integration tests:** run FastAPI's test client against a **real PostgreSQL 18** started by testcontainers, with Alembic migrations applied. Each test runs in an outer transaction that is rolled back. Service transactions run as savepoints inside it, so their commits are rolled back too.
 - **Database-constraint tests:** cover the rules the database itself enforces, as listed in [Decisions](#72-decisions).
 - **Migration round-trip test:** an upgrade to head, a downgrade to base, then another upgrade.
+- **Regression tests:** every bug fix comes with a test that fails before the fix and passes after it, so the bug can't come back, even when this document doesn't state the behaviour. The test is the kind above that covers the layer where the bug was, marked with `@pytest.mark.regression` and a one-line comment describing the bug, with its issue number if there is one, so `pytest -m regression` finds them all.
 
 ### 9.2 Tooling
 - **Poe tasks:** run with `uv run poe <task>`, defined in `pyproject.toml`:

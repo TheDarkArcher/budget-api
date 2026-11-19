@@ -54,7 +54,7 @@
 
 - Write tests before the code they cover. For each change in behaviour, add or update a test, run it and see it fail for the expected reason, then write the code that makes it pass.
 - Refactors that keep behaviour need no new test, but the existing tests must still pass.
-- Test only behaviour that `docs/DESIGN.md` states in its Domain Rules, Decisions (Data Model) or API Design, in the layer that enforces it, with the kinds of test its Testing section describes. A change in behaviour the design doesn't state needs no test; if it needs a decision, ask first, as the Design Document section requires. Don't simulate another layer's work, such as writing a service's archive cascade in SQL in a database test.
+- Test only behaviour that `docs/DESIGN.md` states in its Domain Rules, Decisions (Data Model) or API Design, in the layer that enforces it, with the kinds of test its Testing section describes. A change in behaviour the design doesn't state needs no test; if it needs a decision, ask first, as the Design Document section requires. The exception is a bug fix, which always gets a regression test, as the Testing section of `docs/DESIGN.md` describes. Don't simulate another layer's work, such as writing a service's archive cascade in SQL in a database test.
 - In test modules, order top-level code as: constants, helper classes, helper functions, fixtures, then tests.
 
 ## Quality Gates
