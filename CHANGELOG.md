@@ -16,7 +16,8 @@ Breaking changes are listed under their own **Breaking** heading.
   the version and build label.
 - The v1 database schema: users, transaction categories, item categories,
   payees, tags, items with their sizes and tags, transactions with their
-  lines, and the `transaction_totals` and `items_information` views.
+  lines, idempotency keys, and the `transaction_totals` and
+  `items_information` views.
 - Configuration from environment variables, documented in `.env.example`.
 - Docker Compose setup with PostgreSQL 18 and a one-off `migrate` service.
 - Interactive API documentation at `/docs` and the OpenAPI schema at
