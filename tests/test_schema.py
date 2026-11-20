@@ -5,6 +5,8 @@ it writes outlives the test. Statements expected to fail run inside a
 savepoint, so the failure doesn't abort the rest of the test.
 """
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -13,8 +15,121 @@ from uuid import UUID, uuid4
 
 import pytest
 from psycopg import errors
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError
+
+# Statements for each archivable record, keyed by what they do; "record" is
+# the World attribute holding its id. An item size has no column that may
+# change, so its edit changes the value, which the archived check must refuse
+# before the size check does.
+ARCHIVABLE_RECORDS = [
+    pytest.param(
+        {
+            "record": "category",
+            "archive": "UPDATE transaction_categories SET archived_at = now()"
+            " WHERE id = :id",
+            "unarchive": "UPDATE transaction_categories SET archived_at = NULL"
+            " WHERE id = :id",
+            "edit": "UPDATE transaction_categories SET name = 'Rent' WHERE id = :id",
+            "unarchive_and_edit": "UPDATE transaction_categories"
+            " SET archived_at = NULL, name = 'Rent' WHERE id = :id",
+        },
+        id="transaction category",
+    ),
+    pytest.param(
+        {
+            "record": "item_category",
+            "archive": "UPDATE item_categories SET archived_at = now() WHERE id = :id",
+            "unarchive": "UPDATE item_categories SET archived_at = NULL WHERE id = :id",
+            "edit": "UPDATE item_categories SET name = 'Household' WHERE id = :id",
+            "unarchive_and_edit": "UPDATE item_categories"
+            " SET archived_at = NULL, name = 'Household' WHERE id = :id",
+        },
+        id="item category",
+    ),
+    pytest.param(
+        {
+            "record": "payee",
+            "archive": "UPDATE payees SET archived_at = now() WHERE id = :id",
+            "unarchive": "UPDATE payees SET archived_at = NULL WHERE id = :id",
+            "edit": "UPDATE payees SET name = 'Corner Store' WHERE id = :id",
+            "unarchive_and_edit": "UPDATE payees"
+            " SET archived_at = NULL, name = 'Corner Store' WHERE id = :id",
+        },
+        id="payee",
+    ),
+    pytest.param(
+        {
+            "record": "item",
+            "archive": "UPDATE items SET archived_at = now() WHERE id = :id",
+            "unarchive": "UPDATE items SET archived_at = NULL WHERE id = :id",
+            "edit": "UPDATE items SET name = 'Juice' WHERE id = :id",
+            "unarchive_and_edit": "UPDATE items"
+            " SET archived_at = NULL, name = 'Juice' WHERE id = :id",
+        },
+        id="item",
+    ),
+    pytest.param(
+        {
+            "record": "item_size",
+            "archive": "UPDATE item_sizes SET archived_at = now() WHERE id = :id",
+            "unarchive": "UPDATE item_sizes SET archived_at = NULL WHERE id = :id",
+            "edit": "UPDATE item_sizes SET size_value = 3 WHERE id = :id",
+            "unarchive_and_edit": "UPDATE item_sizes"
+            " SET archived_at = NULL, size_value = 3 WHERE id = :id",
+        },
+        id="item size",
+    ),
+]
+
+# Archiving either side of Alice's link, and changing that link.
+ARCHIVE_TRANSACTION_CATEGORY = (
+    "UPDATE transaction_categories SET archived_at = now() WHERE id = :category"
+)
+ARCHIVE_ITEM_CATEGORY = (
+    "UPDATE item_categories SET archived_at = now() WHERE id = :item_category"
+)
+ARCHIVE_LINKED_CATEGORY = [
+    pytest.param(ARCHIVE_TRANSACTION_CATEGORY, id="transaction category archived"),
+    pytest.param(ARCHIVE_ITEM_CATEGORY, id="item category archived"),
+]
+# Archiving one side of Alice's link, named by its key in INSERT_CATEGORY.
+ARCHIVED_SIDE = [
+    pytest.param(
+        ARCHIVE_TRANSACTION_CATEGORY, "category", id="transaction category archived"
+    ),
+    pytest.param(ARCHIVE_ITEM_CATEGORY, "item_category", id="item category archived"),
+]
+INSERT_CATEGORY = {
+    "category": "INSERT INTO transaction_categories (user_id, name, type)"
+    " VALUES (:user, 'Rent', 'expense') RETURNING id",
+    "item_category": "INSERT INTO item_categories (user_id, name)"
+    " VALUES (:user, 'Household') RETURNING id",
+}
+INSERT_LINK = (
+    "INSERT INTO transaction_category_item_categories"
+    " (transaction_category_id, item_category_id)"
+    " VALUES (:category, :item_category)"
+)
+ARCHIVE_LINK = (
+    "UPDATE transaction_category_item_categories SET archived_at = now()"
+    " WHERE transaction_category_id = :category"
+    " AND item_category_id = :item_category"
+)
+UNARCHIVE_LINK = (
+    "UPDATE transaction_category_item_categories SET archived_at = NULL"
+    " WHERE transaction_category_id = :category"
+    " AND item_category_id = :item_category"
+)
+CHANGE_LINK = [
+    pytest.param(ARCHIVE_LINK, id="update"),
+    pytest.param(
+        "DELETE FROM transaction_category_item_categories"
+        " WHERE transaction_category_id = :category"
+        " AND item_category_id = :item_category",
+        id="delete",
+    ),
+]
 
 
 @dataclass
@@ -44,11 +159,19 @@ def run(connection: Connection, sql: str, **params: object) -> None:
 
 
 def fails(
-    connection: Connection, error: type[Exception], sql: str, **params: object
+    connection: Connection,
+    error: type[Exception],
+    sql: str,
+    *,
+    constraint: str | None = None,
+    **params: object,
 ) -> None:
     with pytest.raises(DBAPIError) as caught, connection.begin_nested():
         connection.execute(text(sql), params)
     assert isinstance(caught.value.orig, error), caught.value.orig
+    if constraint is not None:
+        assert isinstance(caught.value.orig, errors.Error)
+        assert caught.value.orig.diag.constraint_name == constraint
 
 
 def make_world(connection: Connection, name: str) -> World:
@@ -130,6 +253,55 @@ def add_transaction(connection: Connection, world: World, *totals: str) -> UUID:
             total=Decimal(total),
         )
     return transaction
+
+
+def delete_world(connection: Connection, world: World) -> None:
+    # Children first; items take their sizes and tag links with them, and item
+    # categories their links, so the transaction category is left unlinked.
+    run(connection, "DELETE FROM items WHERE user_id = :user", user=world.user)
+    run(
+        connection, "DELETE FROM item_categories WHERE user_id = :user", user=world.user
+    )
+    run(
+        connection,
+        "DELETE FROM transaction_categories WHERE user_id = :user",
+        user=world.user,
+    )
+    run(connection, "DELETE FROM tags WHERE user_id = :user", user=world.user)
+    run(connection, "DELETE FROM payees WHERE user_id = :user", user=world.user)
+    run(connection, "DELETE FROM users WHERE id = :user", user=world.user)
+
+
+def add_link(engine: Engine, category: UUID, item_category: UUID) -> None:
+    with engine.begin() as connection:
+        run(connection, INSERT_LINK, category=category, item_category=item_category)
+
+
+def delete_transaction_category(engine: Engine, category: UUID) -> None:
+    with engine.begin() as connection:
+        run(
+            connection,
+            "DELETE FROM transaction_categories WHERE id = :id",
+            id=category,
+        )
+
+
+def wait_until_blocked(connection: Connection, query: str) -> None:
+    # Statistics are read once per transaction, so each check ends its own.
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        blocked = one(
+            connection,
+            "SELECT EXISTS (SELECT FROM pg_stat_activity"
+            " WHERE datname = current_database()"
+            " AND wait_event_type = 'Lock' AND query LIKE :query)",
+            query=query,
+        )
+        connection.rollback()
+        if blocked:
+            return
+        time.sleep(0.05)
+    pytest.fail(f"no statement like {query!r} was blocked")
 
 
 @pytest.fixture
@@ -572,23 +744,6 @@ def test_deleting_a_tag_removes_it_from_items(
     assert links == 0
 
 
-def test_deleting_a_category_removes_its_links(
-    connection: Connection, alice: World
-) -> None:
-    run(
-        connection,
-        "DELETE FROM transaction_categories WHERE id = :id",
-        id=alice.category,
-    )
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE item_category_id = :id",
-        id=alice.item_category,
-    )
-    assert links == 0
-
-
 def test_deleting_an_item_removes_its_tags_and_sizes(
     connection: Connection, alice: World
 ) -> None:
@@ -675,6 +830,413 @@ def test_cannot_delete_a_user_who_owns_data(
         "DELETE FROM users WHERE id = :id",
         id=alice.user,
     )
+
+
+# Immutable records
+
+
+@pytest.mark.parametrize("statements", ARCHIVABLE_RECORDS)
+@pytest.mark.parametrize("change", ["edit", "archive", "unarchive_and_edit"])
+def test_archived_records_can_only_be_unarchived(
+    connection: Connection, alice: World, statements: dict[str, Any], change: str
+) -> None:
+    record = getattr(alice, statements["record"])
+    run(connection, statements["archive"], id=record)
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        statements[change],
+        constraint="archived_record_immutable",
+        id=record,
+    )
+
+
+@pytest.mark.parametrize("statements", ARCHIVABLE_RECORDS)
+def test_archived_records_can_be_unarchived(
+    connection: Connection, alice: World, statements: dict[str, Any]
+) -> None:
+    record = getattr(alice, statements["record"])
+    run(connection, statements["archive"], id=record)
+    run(connection, statements["unarchive"], id=record)
+
+
+def test_transaction_category_type_cannot_change(
+    connection: Connection, alice: World
+) -> None:
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        "UPDATE transaction_categories SET type = 'income' WHERE id = :id",
+        constraint="transaction_categories_type_immutable",
+        id=alice.category,
+    )
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        pytest.param("UPDATE item_sizes SET size_value = 3 WHERE id = :id", id="value"),
+        pytest.param(
+            "UPDATE item_sizes SET size_unit = 'kg' WHERE id = :id", id="unit"
+        ),
+    ],
+)
+def test_item_size_value_and_unit_cannot_change(
+    connection: Connection, alice: World, sql: str
+) -> None:
+    # Alice's size is unused, so the refusal doesn't depend on transaction lines.
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        sql,
+        constraint="item_sizes_size_immutable",
+        id=alice.item_size,
+    )
+
+
+def test_item_size_cannot_move_to_another_item(
+    connection: Connection, alice: World
+) -> None:
+    other_item = one(
+        connection,
+        "INSERT INTO items (user_id, name, item_category_id)"
+        " VALUES (:user, 'Juice', :item_category) RETURNING id",
+        user=alice.user,
+        item_category=alice.item_category,
+    )
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        "UPDATE item_sizes SET item_id = :item WHERE id = :id",
+        constraint="item_sizes_item_id_immutable",
+        item=other_item,
+        id=alice.item_size,
+    )
+
+
+# Category links. A link can't change while either of its categories is
+# archived, unless the change is a category's delete removing it.
+
+
+@pytest.mark.parametrize("archive", ARCHIVE_LINKED_CATEGORY)
+@pytest.mark.parametrize("change", CHANGE_LINK)
+def test_links_cannot_change_while_a_category_is_archived(
+    connection: Connection, alice: World, archive: str, change: str
+) -> None:
+    ids = {"category": alice.category, "item_category": alice.item_category}
+    run(connection, archive, **ids)
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        change,
+        constraint="transaction_category_item_categories_category_archived",
+        **ids,
+    )
+
+
+@pytest.mark.parametrize("archive", ARCHIVE_LINKED_CATEGORY)
+def test_links_cannot_be_unarchived_while_a_category_is_archived(
+    connection: Connection, alice: World, archive: str
+) -> None:
+    # The link is archived while both categories are active, then one of them
+    # is archived.
+    ids = {"category": alice.category, "item_category": alice.item_category}
+    run(connection, ARCHIVE_LINK, **ids)
+    run(connection, archive, **ids)
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        UNARCHIVE_LINK,
+        constraint="transaction_category_item_categories_category_archived",
+        **ids,
+    )
+
+
+@pytest.mark.parametrize(("archive", "archived_side"), ARCHIVED_SIDE)
+def test_links_cannot_be_added_while_a_category_is_archived(
+    connection: Connection, alice: World, archive: str, archived_side: str
+) -> None:
+    # The new link joins the archived one of Alice's categories to a new
+    # active category on the other side.
+    ids = {"category": alice.category, "item_category": alice.item_category}
+    run(connection, archive, **ids)
+    new_ids = {
+        side: one(connection, sql, user=alice.user)
+        for side, sql in INSERT_CATEGORY.items()
+    }
+    fails(
+        connection,
+        errors.IntegrityConstraintViolation,
+        INSERT_LINK,
+        constraint="transaction_category_item_categories_category_archived",
+        **new_ids | {archived_side: ids[archived_side]},
+    )
+
+
+@pytest.mark.parametrize(("archive", "archived_side"), ARCHIVED_SIDE)
+def test_adding_a_link_during_a_concurrent_archive_is_refused(
+    engine: Engine, archive: str, archived_side: str
+) -> None:
+    # The link's insert starts while the archive isn't committed yet, so it
+    # must wait and then see the category as archived, rather than link it.
+    with engine.connect() as setup:
+        carol = make_world(setup, "Carol")
+        new_ids = {
+            side: one(setup, sql, user=carol.user)
+            for side, sql in INSERT_CATEGORY.items()
+        }
+        setup.commit()
+    ids = {"category": carol.category, "item_category": carol.item_category}
+    link = new_ids | {archived_side: ids[archived_side]}
+    try:
+        # The executor comes first so that, on a failure, the connections close
+        # and release the archive's lock before the executor waits for the link.
+        with (
+            ThreadPoolExecutor(max_workers=1) as executor,
+            engine.connect() as archiver,
+            engine.connect() as watcher,
+        ):
+            run(archiver, archive, **ids)
+            linking = executor.submit(
+                add_link, engine, link["category"], link["item_category"]
+            )
+            wait_until_blocked(watcher, "INSERT INTO transaction_category_item_%")
+            archiver.commit()
+            with pytest.raises(DBAPIError) as caught:
+                linking.result(timeout=10)
+        assert isinstance(caught.value.orig, errors.IntegrityConstraintViolation)
+        assert (
+            caught.value.orig.diag.constraint_name
+            == "transaction_category_item_categories_category_archived"
+        )
+    finally:
+        with engine.connect() as cleanup:
+            delete_world(cleanup, carol)
+            cleanup.commit()
+
+
+def test_deleting_a_category_waits_for_a_concurrent_link(engine: Engine) -> None:
+    # The delete starts while a link to the category isn't committed yet, so it
+    # must wait and then see the link, rather than cascade it away.
+    with engine.connect() as setup:
+        carol = make_world(setup, "Carol")
+        category = one(setup, INSERT_CATEGORY["category"], user=carol.user)
+        setup.commit()
+    try:
+        # The executor comes first so that, on a failure, the connections close
+        # and release the link's lock before the executor waits for the delete.
+        with (
+            ThreadPoolExecutor(max_workers=1) as executor,
+            engine.connect() as linker,
+            engine.connect() as watcher,
+        ):
+            run(
+                linker,
+                INSERT_LINK,
+                category=category,
+                item_category=carol.item_category,
+            )
+            deleting = executor.submit(delete_transaction_category, engine, category)
+            wait_until_blocked(watcher, "DELETE FROM transaction_categories%")
+            linker.commit()
+            with pytest.raises(DBAPIError) as caught:
+                deleting.result(timeout=10)
+        assert isinstance(caught.value.orig, errors.RestrictViolation)
+        assert (
+            caught.value.orig.diag.constraint_name
+            == "transaction_categories_item_category_link"
+        )
+    finally:
+        with engine.connect() as cleanup:
+            delete_world(cleanup, carol)
+            cleanup.commit()
+
+
+def test_deleting_an_archived_transaction_category_removes_its_links(
+    connection: Connection, alice: World
+) -> None:
+    run(
+        connection,
+        "UPDATE transaction_categories SET archived_at = now() WHERE id = :id",
+        id=alice.category,
+    )
+    run(
+        connection,
+        "DELETE FROM transaction_categories WHERE id = :id",
+        id=alice.category,
+    )
+    links = count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE item_category_id = :id",
+        id=alice.item_category,
+    )
+    assert links == 0
+
+
+def test_deleting_an_item_category_removes_links_to_archived_categories(
+    connection: Connection, alice: World
+) -> None:
+    item_category = one(
+        connection,
+        "INSERT INTO item_categories (user_id, name)"
+        " VALUES (:user, 'Household') RETURNING id",
+        user=alice.user,
+    )
+    run(
+        connection,
+        "INSERT INTO transaction_category_item_categories"
+        " (transaction_category_id, item_category_id)"
+        " VALUES (:category, :item_category)",
+        category=alice.category,
+        item_category=item_category,
+    )
+    run(
+        connection,
+        "UPDATE transaction_categories SET archived_at = now() WHERE id = :id",
+        id=alice.category,
+    )
+    run(connection, "DELETE FROM item_categories WHERE id = :id", id=item_category)
+    links = count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE item_category_id = :id",
+        id=item_category,
+    )
+    assert links == 0
+
+
+def test_cannot_delete_an_active_transaction_category_with_an_active_link(
+    connection: Connection, alice: World
+) -> None:
+    fails(
+        connection,
+        errors.RestrictViolation,
+        "DELETE FROM transaction_categories WHERE id = :id",
+        constraint="transaction_categories_item_category_link",
+        id=alice.category,
+    )
+    links = count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE transaction_category_id = :id",
+        id=alice.category,
+    )
+    assert links == 1
+
+
+@pytest.mark.parametrize(
+    "unlink",
+    [
+        pytest.param(
+            "UPDATE transaction_category_item_categories SET archived_at = now()"
+            " WHERE transaction_category_id = :category",
+            id="link archived",
+        ),
+        pytest.param(
+            "UPDATE item_categories SET archived_at = now() WHERE id = :item_category",
+            id="item category archived",
+        ),
+    ],
+)
+def test_a_transaction_category_without_an_applying_link_deletes_with_its_links(
+    connection: Connection, alice: World, unlink: str
+) -> None:
+    run(
+        connection,
+        unlink,
+        category=alice.category,
+        item_category=alice.item_category,
+    )
+    run(
+        connection,
+        "DELETE FROM transaction_categories WHERE id = :id",
+        id=alice.category,
+    )
+    links = count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE transaction_category_id = :id",
+        id=alice.category,
+    )
+    assert links == 0
+
+
+# Idempotency keys
+
+
+def test_idempotency_keys_are_unique_per_user(
+    connection: Connection, alice: World, bob: World
+) -> None:
+    insert = (
+        "INSERT INTO idempotency_keys (user_id, key, request_hash)"
+        " VALUES (:user, 'abc', 'hash')"
+    )
+    run(connection, insert, user=alice.user)
+    run(connection, insert, user=bob.user)
+    fails(
+        connection,
+        errors.UniqueViolation,
+        insert,
+        constraint="idempotency_keys_user_id_key_key",
+        user=alice.user,
+    )
+
+
+def test_idempotency_keys_without_a_user_are_unique(connection: Connection) -> None:
+    insert = (
+        "INSERT INTO idempotency_keys (user_id, key, request_hash)"
+        " VALUES (NULL, 'abc', 'hash')"
+    )
+    run(connection, insert)
+    fails(
+        connection,
+        errors.UniqueViolation,
+        insert,
+        constraint="idempotency_keys_user_id_key_key",
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        pytest.param(201, None, id="status without body"),
+        pytest.param(None, "{}", id="body without status"),
+    ],
+)
+def test_idempotency_key_responses_are_stored_whole(
+    connection: Connection, alice: World, status: int | None, body: str | None
+) -> None:
+    fails(
+        connection,
+        errors.CheckViolation,
+        "INSERT INTO idempotency_keys"
+        " (user_id, key, request_hash, response_status, response_body)"
+        " VALUES (:user, 'abc', 'hash', :status, :body)",
+        constraint="idempotency_keys_response_complete",
+        user=alice.user,
+        status=status,
+        body=body,
+    )
+
+
+def test_deleting_a_user_removes_their_idempotency_keys(
+    connection: Connection,
+) -> None:
+    user = one(connection, "INSERT INTO users (name) VALUES ('Carol') RETURNING id")
+    run(
+        connection,
+        "INSERT INTO idempotency_keys (user_id, key, request_hash)"
+        " VALUES (:user, 'abc', 'hash')",
+        user=user,
+    )
+    run(connection, "DELETE FROM users WHERE id = :id", id=user)
+    keys = count(
+        connection,
+        "SELECT count(*) FROM idempotency_keys WHERE user_id = :id",
+        id=user,
+    )
+    assert keys == 0
 
 
 # transaction_totals view
