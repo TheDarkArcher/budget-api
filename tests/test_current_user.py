@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from problems import assert_problem
 from sqlalchemy import Connection
 
 from app.api import dependencies, v1
@@ -80,8 +81,13 @@ def test_requests_are_forbidden_without_the_dummy_user(
     probe_client: TestClient, caplog: pytest.LogCaptureFixture, path: str
 ) -> None:
     response = probe_client.get(path)
-    assert response.status_code == 403
-    assert response.json() == {"detail": "Not authorised"}
+    problem_body = assert_problem(response, 403)
+    assert problem_body == {
+        "type": "about:blank",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Not authorised",
+    }
     assert "has the database been seeded?" in caplog.text
 
 

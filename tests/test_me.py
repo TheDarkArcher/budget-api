@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from problems import assert_problem
 from sqlalchemy import Connection
 
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
@@ -31,8 +32,13 @@ def test_returns_the_dummy_user(client: TestClient) -> None:
 
 def test_is_forbidden_without_the_dummy_user(client: TestClient) -> None:
     response = client.get(PATH)
-    assert response.status_code == 403
-    assert response.json() == {"detail": "Not authorised"}
+    problem_body = assert_problem(response, 403)
+    assert problem_body == {
+        "type": "about:blank",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Not authorised",
+    }
 
 
 def test_is_documented_with_its_responses(client: TestClient) -> None:

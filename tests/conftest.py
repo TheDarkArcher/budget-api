@@ -22,6 +22,9 @@ from app.database.engine import get_connection, get_engine, get_ping_engine
 from app.main import create_app
 from app.repositories.users import SQLUserRepository
 
+# Pytest only explains failed asserts in test modules and those registered here.
+pytest.register_assert_rewrite("problems")
+
 ROOT = Path(__file__).resolve().parents[1]
 
 

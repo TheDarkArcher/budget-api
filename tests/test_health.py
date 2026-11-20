@@ -7,6 +7,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from problems import assert_problem
 
 from app import __version__
 from app.api.health import get_health_checks
@@ -181,11 +182,16 @@ def test_ready_runs_checks_concurrently(app: FastAPI, client: TestClient) -> Non
 
 
 def test_unexpected_error_in_a_check_is_not_hidden(
-    app: FastAPI, client: TestClient
+    app: FastAPI, client: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     def broken() -> None:
         raise RuntimeError("bug in the check")
 
     use_checks(app, {"broken": broken})
-    with pytest.raises(RuntimeError, match="bug in the check"):
-        client.get("/health/ready")
+    response = client.get("/health/ready")
+    # A server error, not a 503 that reports the check as merely unhealthy.
+    assert_problem(response, 500)
+    assert any(
+        record.exc_info is not None and "bug in the check" in str(record.exc_info[1])
+        for record in caplog.records
+    )

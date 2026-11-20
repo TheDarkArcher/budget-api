@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api import health, v1
+from app.api.problems import add_problem_handlers
 from app.core.config import get_settings
 
 
@@ -22,6 +23,9 @@ def create_app() -> FastAPI:
     """
     settings = get_settings()
     app = FastAPI(title="Budget Tracker API", version=settings.app_build or __version__)
+    # Added before CORS, so CORS wraps it and a 500 problem is readable by
+    # the frontend too.
+    add_problem_handlers(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
