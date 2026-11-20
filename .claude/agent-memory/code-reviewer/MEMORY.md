@@ -1,1 +1,2 @@
+- [Test helper modules](project_test_helper_modules.md) — tests/ helpers are top-level imports; asserting helpers must be registered for assert rewriting
 - [Scripts, subprocess and test conventions](project_scripts_subprocess_and_tests.md) — S603 noqa precedent, script test imports, cleanup pitfalls
