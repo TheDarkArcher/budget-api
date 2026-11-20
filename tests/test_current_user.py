@@ -12,7 +12,7 @@ from app.api.dependencies import CurrentUserDep
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.database.engine import get_connection
 from app.main import create_app
-from app.repositories.users import SQLUserRepository, User, UserRepository
+from app.repositories.users import User, UserRepository
 from app.services.users import get_user
 
 
@@ -43,11 +43,6 @@ def probe_client(
     app.dependency_overrides[get_connection] = override
     with TestClient(app) as client:
         yield client
-
-
-@pytest.fixture
-def dummy_user(connection: Connection) -> None:
-    SQLUserRepository(connection).create(DUMMY_USER_ID, DUMMY_USER_NAME)
 
 
 @pytest.mark.usefixtures("dummy_user")
