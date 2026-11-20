@@ -13,6 +13,7 @@ from fakes import (
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from records import World, make_world
 from sqlalchemy import Connection, Engine
 from testcontainers.community.postgres import PostgresContainer
 
@@ -106,6 +107,11 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 @pytest.fixture
 def dummy_user(connection: Connection) -> None:
     SQLUserRepository(connection).create(DUMMY_USER_ID, DUMMY_USER_NAME)
+
+
+@pytest.fixture
+def alice(connection: Connection) -> World:
+    return make_world(connection, "Alice")
 
 
 @pytest.fixture
