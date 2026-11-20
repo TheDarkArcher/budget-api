@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from sqlalchemy import Connection, text
+from sql import rows
+from sqlalchemy import Connection
 from sqlalchemy.exc import SQLAlchemyError
 
 import seed
@@ -54,12 +55,6 @@ class SavepointEngine:
             yield self.connection
 
 
-def rows(connection: Connection, sql: str) -> set[tuple[Any, ...]]:
-    return {
-        tuple(row) for row in connection.execute(text(sql), {"user": DUMMY_USER_ID})
-    }
-
-
 def seed_on(connection: Connection) -> bool:
     return seed.seed_dummy_user(
         SQLUserRepository(connection),
@@ -69,14 +64,18 @@ def seed_on(connection: Connection) -> bool:
 
 
 def dummy_user_data(connection: Connection) -> dict[str, set[tuple[Any, ...]]]:
+    user = DUMMY_USER_ID
     return {
-        "user": rows(connection, "SELECT name FROM users WHERE id = :user"),
+        "user": rows(connection, "SELECT name FROM users WHERE id = :user", user=user),
         "transaction categories": rows(
             connection,
             "SELECT name, type::text FROM transaction_categories WHERE user_id = :user",
+            user=user,
         ),
         "item categories": rows(
-            connection, "SELECT name FROM item_categories WHERE user_id = :user"
+            connection,
+            "SELECT name FROM item_categories WHERE user_id = :user",
+            user=user,
         ),
         "links": rows(
             connection,
@@ -87,6 +86,7 @@ def dummy_user_data(connection: Connection) -> dict[str, set[tuple[Any, ...]]]:
             "  JOIN item_categories ON item_categories.id"
             "   = transaction_category_item_categories.item_category_id"
             " WHERE transaction_categories.user_id = :user",
+            user=user,
         ),
     }
 

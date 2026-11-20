@@ -7,7 +7,6 @@ savepoint, so the failure doesn't abort the rest of the test.
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -15,6 +14,21 @@ from uuid import UUID, uuid4
 
 import pytest
 from psycopg import errors
+from records import (
+    World,
+    add_item,
+    add_item_category,
+    add_line,
+    add_size,
+    add_tag,
+    add_transaction,
+    add_transaction_category,
+    add_user,
+    link,
+    make_world,
+    tag_item,
+)
+from sql import count, one, run
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError
 
@@ -93,19 +107,13 @@ ARCHIVE_LINKED_CATEGORY = [
     pytest.param(ARCHIVE_TRANSACTION_CATEGORY, id="transaction category archived"),
     pytest.param(ARCHIVE_ITEM_CATEGORY, id="item category archived"),
 ]
-# Archiving one side of Alice's link, named by its key in INSERT_CATEGORY.
+# Archiving one side of Alice's link, named by its key in add_unlinked_categories.
 ARCHIVED_SIDE = [
     pytest.param(
         ARCHIVE_TRANSACTION_CATEGORY, "category", id="transaction category archived"
     ),
     pytest.param(ARCHIVE_ITEM_CATEGORY, "item_category", id="item category archived"),
 ]
-INSERT_CATEGORY = {
-    "category": "INSERT INTO transaction_categories (user_id, name, type)"
-    " VALUES (:user, 'Rent', 'expense') RETURNING id",
-    "item_category": "INSERT INTO item_categories (user_id, name)"
-    " VALUES (:user, 'Household') RETURNING id",
-}
 INSERT_LINK = (
     "INSERT INTO transaction_category_item_categories"
     " (transaction_category_id, item_category_id)"
@@ -132,32 +140,6 @@ CHANGE_LINK = [
 ]
 
 
-@dataclass
-class World:
-    """One user's data: a category linked to an item category, and so on."""
-
-    user: UUID
-    category: UUID
-    item_category: UUID
-    payee: UUID
-    tag: UUID
-    item: UUID
-    item_size: UUID
-
-
-def one(connection: Connection, sql: str, **params: object) -> Any:
-    return connection.execute(text(sql), params).scalar_one()
-
-
-def count(connection: Connection, table_sql: str, **params: object) -> int:
-    result: int = one(connection, table_sql, **params)
-    return result
-
-
-def run(connection: Connection, sql: str, **params: object) -> None:
-    connection.execute(text(sql), params)
-
-
 def fails(
     connection: Connection,
     error: type[Exception],
@@ -174,85 +156,18 @@ def fails(
         assert caught.value.orig.diag.constraint_name == constraint
 
 
-def make_world(connection: Connection, name: str) -> World:
-    user = one(
-        connection,
-        "INSERT INTO users (name) VALUES (:name) RETURNING id",
-        name=name,
-    )
-    category = one(
-        connection,
-        "INSERT INTO transaction_categories (user_id, name, type)"
-        " VALUES (:user, 'Groceries', 'expense') RETURNING id",
-        user=user,
-    )
-    item_category = one(
-        connection,
-        "INSERT INTO item_categories (user_id, name)"
-        " VALUES (:user, 'Food & Drink') RETURNING id",
-        user=user,
-    )
-    run(
-        connection,
-        "INSERT INTO transaction_category_item_categories"
-        " (transaction_category_id, item_category_id)"
-        " VALUES (:category, :item_category)",
-        category=category,
-        item_category=item_category,
-    )
-    payee = one(
-        connection,
-        "INSERT INTO payees (user_id, name) VALUES (:user, 'Supermarket') RETURNING id",
-        user=user,
-    )
-    tag = one(
-        connection,
-        "INSERT INTO tags (user_id, name) VALUES (:user, 'Dairy') RETURNING id",
-        user=user,
-    )
-    item = one(
-        connection,
-        "INSERT INTO items (user_id, name, item_category_id)"
-        " VALUES (:user, 'Milk', :item_category) RETURNING id",
-        user=user,
-        item_category=item_category,
-    )
-    item_size = one(
-        connection,
-        "INSERT INTO item_sizes (item_id, size_value, size_unit)"
-        " VALUES (:item, 2, 'L') RETURNING id",
-        item=item,
-    )
-    run(
-        connection,
-        "INSERT INTO item_tags (item_id, tag_id) VALUES (:item, :tag)",
-        item=item,
-        tag=tag,
-    )
-    return World(user, category, item_category, payee, tag, item, item_size)
-
-
-def add_transaction(connection: Connection, world: World, *totals: str) -> UUID:
-    transaction: UUID = one(
-        connection,
-        "INSERT INTO transactions"
-        " (user_id, occurred_on, transaction_category_id, payee_id)"
-        " VALUES (:user, '2026-10-23', :category, :payee) RETURNING id",
-        user=world.user,
-        category=world.category,
-        payee=world.payee,
-    )
+def add_world_transaction(connection: Connection, world: World, *totals: str) -> UUID:
+    transaction = add_transaction(connection, world.user, world.category, world.payee)
     for total in totals:
-        run(
-            connection,
-            "INSERT INTO transaction_lines"
-            " (transaction_id, item_size_id, quantity, line_total)"
-            " VALUES (:transaction, :item_size, 1, :total)",
-            transaction=transaction,
-            item_size=world.item_size,
-            total=Decimal(total),
-        )
+        add_line(connection, transaction, world.item_size, total)
     return transaction
+
+
+def add_unlinked_categories(connection: Connection, user: UUID) -> dict[str, UUID]:
+    return {
+        "category": add_transaction_category(connection, user, "Rent"),
+        "item_category": add_item_category(connection, user, "Household"),
+    }
 
 
 def delete_world(connection: Connection, world: World) -> None:
@@ -302,11 +217,6 @@ def wait_until_blocked(connection: Connection, query: str) -> None:
             return
         time.sleep(0.05)
     pytest.fail(f"no statement like {query!r} was blocked")
-
-
-@pytest.fixture
-def alice(connection: Connection) -> World:
-    return make_world(connection, "Alice")
 
 
 @pytest.fixture
@@ -407,7 +317,7 @@ def test_rejects_references_to_another_users_data(
 def test_rejects_line_for_another_users_item(
     connection: Connection, alice: World, bob: World
 ) -> None:
-    transaction = add_transaction(connection, alice, "1.00")
+    transaction = add_world_transaction(connection, alice, "1.00")
     fails(
         connection,
         errors.ForeignKeyViolation,
@@ -422,7 +332,7 @@ def test_rejects_line_for_another_users_item(
 def test_rejects_line_in_another_users_transaction(
     connection: Connection, alice: World, bob: World
 ) -> None:
-    transaction = add_transaction(connection, bob, "1.00")
+    transaction = add_world_transaction(connection, bob, "1.00")
     fails(
         connection,
         errors.ForeignKeyViolation,
@@ -437,7 +347,7 @@ def test_rejects_line_in_another_users_transaction(
 def test_rejects_changing_a_reference_to_another_users_data(
     connection: Connection, alice: World, bob: World
 ) -> None:
-    transaction = add_transaction(connection, alice, "1.00")
+    transaction = add_world_transaction(connection, alice, "1.00")
     fails(
         connection,
         errors.ForeignKeyViolation,
@@ -521,7 +431,9 @@ def test_direct_links_use_composite_foreign_keys(
 def test_user_ids_cannot_change(
     connection: Connection, alice: World, bob: World, sql: str, attribute: str
 ) -> None:
-    ids = vars(alice) | {"transaction": add_transaction(connection, alice, "1.00")}
+    ids = vars(alice) | {
+        "transaction": add_world_transaction(connection, alice, "1.00")
+    }
     fails(
         connection,
         errors.IntegrityConstraintViolation,
@@ -552,7 +464,7 @@ def test_setting_user_id_to_its_current_value_is_allowed(
 def test_rejects_non_positive_quantities_and_totals(
     connection: Connection, alice: World, quantity: str, line_total: str
 ) -> None:
-    transaction = add_transaction(connection, alice, "1.00")
+    transaction = add_world_transaction(connection, alice, "1.00")
     fails(
         connection,
         errors.CheckViolation,
@@ -697,13 +609,7 @@ def test_item_sizes_are_unique_within_an_item(
         "INSERT INTO item_sizes (item_id, size_value, size_unit)"
         " VALUES (:item, :size, :unit)"
     )
-    other_item = one(
-        connection,
-        "INSERT INTO items (user_id, name, item_category_id)"
-        " VALUES (:user, 'Juice', :item_category) RETURNING id",
-        user=alice.user,
-        item_category=alice.item_category,
-    )
+    other_item = add_item(connection, alice.user, alice.item_category, "Juice")
     run(connection, insert, item=alice.item, size=1, unit="L")
     run(connection, insert, item=alice.item, size=2, unit="kg")
     run(connection, insert, item=other_item, size=2, unit="L")
@@ -724,7 +630,7 @@ def test_item_sizes_are_unique_within_an_item(
 def test_deleting_a_transaction_deletes_its_lines(
     connection: Connection, alice: World
 ) -> None:
-    transaction = add_transaction(connection, alice, "1.00", "2.00")
+    transaction = add_world_transaction(connection, alice, "1.00", "2.00")
     run(connection, "DELETE FROM transactions WHERE id = :id", id=transaction)
     lines = count(
         connection,
@@ -764,20 +670,8 @@ def test_deleting_an_item_category_removes_its_links(
     connection: Connection, alice: World
 ) -> None:
     # A new item category, since one with items can't be deleted.
-    item_category = one(
-        connection,
-        "INSERT INTO item_categories (user_id, name)"
-        " VALUES (:user, 'Household') RETURNING id",
-        user=alice.user,
-    )
-    run(
-        connection,
-        "INSERT INTO transaction_category_item_categories"
-        " (transaction_category_id, item_category_id)"
-        " VALUES (:category, :item_category)",
-        category=alice.category,
-        item_category=item_category,
-    )
+    item_category = add_item_category(connection, alice.user, "Household")
+    link(connection, alice.category, item_category)
     run(connection, "DELETE FROM item_categories WHERE id = :id", id=item_category)
     links = count(
         connection,
@@ -806,7 +700,7 @@ def test_deleting_an_item_category_removes_its_links(
 def test_cannot_delete_records_still_used_by_a_transaction(
     connection: Connection, alice: World, sql: str, attribute: str
 ) -> None:
-    add_transaction(connection, alice, "1.00")
+    add_world_transaction(connection, alice, "1.00")
     fails(connection, errors.RestrictViolation, sql, id=getattr(alice, attribute))
 
 
@@ -897,13 +791,7 @@ def test_item_size_value_and_unit_cannot_change(
 def test_item_size_cannot_move_to_another_item(
     connection: Connection, alice: World
 ) -> None:
-    other_item = one(
-        connection,
-        "INSERT INTO items (user_id, name, item_category_id)"
-        " VALUES (:user, 'Juice', :item_category) RETURNING id",
-        user=alice.user,
-        item_category=alice.item_category,
-    )
+    other_item = add_item(connection, alice.user, alice.item_category, "Juice")
     fails(
         connection,
         errors.IntegrityConstraintViolation,
@@ -960,10 +848,7 @@ def test_links_cannot_be_added_while_a_category_is_archived(
     # active category on the other side.
     ids = {"category": alice.category, "item_category": alice.item_category}
     run(connection, archive, **ids)
-    new_ids = {
-        side: one(connection, sql, user=alice.user)
-        for side, sql in INSERT_CATEGORY.items()
-    }
+    new_ids = add_unlinked_categories(connection, alice.user)
     fails(
         connection,
         errors.IntegrityConstraintViolation,
@@ -981,13 +866,10 @@ def test_adding_a_link_during_a_concurrent_archive_is_refused(
     # must wait and then see the category as archived, rather than link it.
     with engine.connect() as setup:
         carol = make_world(setup, "Carol")
-        new_ids = {
-            side: one(setup, sql, user=carol.user)
-            for side, sql in INSERT_CATEGORY.items()
-        }
+        new_ids = add_unlinked_categories(setup, carol.user)
         setup.commit()
     ids = {"category": carol.category, "item_category": carol.item_category}
-    link = new_ids | {archived_side: ids[archived_side]}
+    link_ids = new_ids | {archived_side: ids[archived_side]}
     try:
         # The executor comes first so that, on a failure, the connections close
         # and release the archive's lock before the executor waits for the link.
@@ -998,7 +880,7 @@ def test_adding_a_link_during_a_concurrent_archive_is_refused(
         ):
             run(archiver, archive, **ids)
             linking = executor.submit(
-                add_link, engine, link["category"], link["item_category"]
+                add_link, engine, link_ids["category"], link_ids["item_category"]
             )
             wait_until_blocked(watcher, "INSERT INTO transaction_category_item_%")
             archiver.commit()
@@ -1020,7 +902,7 @@ def test_deleting_a_category_waits_for_a_concurrent_link(engine: Engine) -> None
     # must wait and then see the link, rather than cascade it away.
     with engine.connect() as setup:
         carol = make_world(setup, "Carol")
-        category = one(setup, INSERT_CATEGORY["category"], user=carol.user)
+        category = add_transaction_category(setup, carol.user, "Rent")
         setup.commit()
     try:
         # The executor comes first so that, on a failure, the connections close
@@ -1077,20 +959,8 @@ def test_deleting_an_archived_transaction_category_removes_its_links(
 def test_deleting_an_item_category_removes_links_to_archived_categories(
     connection: Connection, alice: World
 ) -> None:
-    item_category = one(
-        connection,
-        "INSERT INTO item_categories (user_id, name)"
-        " VALUES (:user, 'Household') RETURNING id",
-        user=alice.user,
-    )
-    run(
-        connection,
-        "INSERT INTO transaction_category_item_categories"
-        " (transaction_category_id, item_category_id)"
-        " VALUES (:category, :item_category)",
-        category=alice.category,
-        item_category=item_category,
-    )
+    item_category = add_item_category(connection, alice.user, "Household")
+    link(connection, alice.category, item_category)
     run(
         connection,
         "UPDATE transaction_categories SET archived_at = now() WHERE id = :id",
@@ -1223,7 +1093,7 @@ def test_idempotency_key_responses_are_stored_whole(
 def test_deleting_a_user_removes_their_idempotency_keys(
     connection: Connection,
 ) -> None:
-    user = one(connection, "INSERT INTO users (name) VALUES ('Carol') RETURNING id")
+    user = add_user(connection, "Carol")
     run(
         connection,
         "INSERT INTO idempotency_keys (user_id, key, request_hash)"
@@ -1245,7 +1115,7 @@ def test_deleting_a_user_removes_their_idempotency_keys(
 def test_view_derives_total_and_line_count(
     connection: Connection, alice: World
 ) -> None:
-    transaction = add_transaction(connection, alice, "3.50", "2.70")
+    transaction = add_world_transaction(connection, alice, "3.50", "2.70")
     row = connection.execute(
         text("SELECT total, line_count FROM transaction_totals WHERE id = :id"),
         {"id": transaction},
@@ -1257,7 +1127,7 @@ def test_view_derives_total_and_line_count(
 def test_view_shows_transactions_without_lines(
     connection: Connection, alice: World
 ) -> None:
-    transaction = add_transaction(connection, alice)
+    transaction = add_world_transaction(connection, alice)
     row = connection.execute(
         text("SELECT total, line_count FROM transaction_totals WHERE id = :id"),
         {"id": transaction},
@@ -1272,23 +1142,8 @@ def test_view_shows_transactions_without_lines(
 def test_items_information_has_one_row_per_size_with_all_tags(
     connection: Connection, alice: World
 ) -> None:
-    run(
-        connection,
-        "INSERT INTO item_sizes (item_id, size_value, size_unit)"
-        " VALUES (:item, 1.5, 'L')",
-        item=alice.item,
-    )
-    tag = one(
-        connection,
-        "INSERT INTO tags (user_id, name) VALUES (:user, 'Breakfast') RETURNING id",
-        user=alice.user,
-    )
-    run(
-        connection,
-        "INSERT INTO item_tags (item_id, tag_id) VALUES (:item, :tag)",
-        item=alice.item,
-        tag=tag,
-    )
+    add_size(connection, alice.item, "1.5", "L")
+    tag_item(connection, alice.item, add_tag(connection, alice.user, "Breakfast"))
     rows = (
         connection.execute(
             text(
