@@ -10,19 +10,19 @@ from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.repositories.users import SQLUserRepository
 
 PATH = "/api/v1/me"
-# Created before the dummy user, with an id that sorts before theirs, so an
-# endpoint returning the first user it finds would return this one instead.
+# Sorts before the dummy user's id.
 OTHER_USER_ID = UUID("00000000-0000-7000-8000-000000000000")
 
 
 @pytest.fixture
-def dummy_user(connection: Connection) -> None:
-    user_repo = SQLUserRepository(connection)
-    user_repo.create(OTHER_USER_ID, "Other user")
-    user_repo.create(DUMMY_USER_ID, DUMMY_USER_NAME)
+def other_user(connection: Connection) -> None:
+    SQLUserRepository(connection).create(OTHER_USER_ID, "Other user")
 
 
-@pytest.mark.usefixtures("dummy_user")
+# The fixtures have been ordered to create the other_user before the dummy
+# user so that if the result returned is the first created or the first id
+# the other_user is returned instead of the expected dummy_user.
+@pytest.mark.usefixtures("other_user", "dummy_user")
 def test_returns_the_dummy_user(client: TestClient) -> None:
     response = client.get(PATH)
     assert response.status_code == 200

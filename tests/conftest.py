@@ -17,8 +17,10 @@ from sqlalchemy import Connection, Engine
 from testcontainers.community.postgres import PostgresContainer
 
 from app.core.config import Settings, get_settings
+from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.database.engine import get_connection, get_engine, get_ping_engine
 from app.main import create_app
+from app.repositories.users import SQLUserRepository
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -96,6 +98,11 @@ def app(connection: Connection) -> FastAPI:
 def client(app: FastAPI) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def dummy_user(connection: Connection) -> None:
+    SQLUserRepository(connection).create(DUMMY_USER_ID, DUMMY_USER_NAME)
 
 
 @pytest.fixture
