@@ -6,6 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import Connection, text
 
+from app.repositories.errors import translate_constraint_errors
+
 type CategoryType = Literal["income", "expense"]
 
 
@@ -23,6 +25,9 @@ class TransactionCategoryRepository(ABC):
 
         Returns:
             The new category's id.
+
+        Raises:
+            NameConflictError: If the user has another category with the name.
         """
 
     @abstractmethod
@@ -34,6 +39,9 @@ class TransactionCategoryRepository(ABC):
         Args:
             transaction_category_id: The transaction category to link.
             item_category_id: The item category to link.
+
+        Raises:
+            ArchivedError: If either category is archived.
         """
 
 
@@ -58,14 +66,18 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
 
         Returns:
             The new category's id.
+
+        Raises:
+            NameConflictError: If the user has another category with the name.
         """
-        category_id: UUID = self._connection.execute(
-            text(
-                "INSERT INTO transaction_categories (user_id, name, type)"
-                " VALUES (:user_id, :name, :type) RETURNING id"
-            ),
-            {"user_id": user_id, "name": name, "type": category_type},
-        ).scalar_one()
+        with translate_constraint_errors(self._connection):
+            category_id: UUID = self._connection.execute(
+                text(
+                    "INSERT INTO transaction_categories (user_id, name, type)"
+                    " VALUES (:user_id, :name, :type) RETURNING id"
+                ),
+                {"user_id": user_id, "name": name, "type": category_type},
+            ).scalar_one()
         return category_id
 
     def link_item_category(
@@ -76,15 +88,19 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
         Args:
             transaction_category_id: The transaction category to link.
             item_category_id: The item category to link.
+
+        Raises:
+            ArchivedError: If either category is archived.
         """
-        self._connection.execute(
-            text(
-                "INSERT INTO transaction_category_item_categories"
-                " (transaction_category_id, item_category_id)"
-                " VALUES (:transaction_category_id, :item_category_id)"
-            ),
-            {
-                "transaction_category_id": transaction_category_id,
-                "item_category_id": item_category_id,
-            },
-        )
+        with translate_constraint_errors(self._connection):
+            self._connection.execute(
+                text(
+                    "INSERT INTO transaction_category_item_categories"
+                    " (transaction_category_id, item_category_id)"
+                    " VALUES (:transaction_category_id, :item_category_id)"
+                ),
+                {
+                    "transaction_category_id": transaction_category_id,
+                    "item_category_id": item_category_id,
+                },
+            )
