@@ -13,6 +13,13 @@ from pydantic.alias_generators import to_camel
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
+from app.core.errors import (
+    ArchivedError,
+    Blocker,
+    DomainError,
+    InUseError,
+    TypeChangeError,
+)
 from app.schemas.base import ApiModel
 from app.schemas.problems import Problem, ProblemErrorEntry
 
@@ -59,6 +66,23 @@ IDEMPOTENCY_KEY_MISMATCH = ProblemType(
     HTTPStatus.UNPROCESSABLE_CONTENT,
     "Idempotency key reused",
 )
+
+# The in-use problem type and detail for each thing that can block a delete.
+IN_USE_PROBLEMS: Mapping[Blocker, tuple[ProblemType, str]] = {
+    Blocker.TRANSACTION: (
+        IN_USE_TRANSACTION,
+        "A transaction uses the record, so it can't be deleted; archive it instead.",
+    ),
+    Blocker.ITEM: (
+        IN_USE_ITEM,
+        "An item uses the record, so it can't be deleted; archive it instead.",
+    ),
+    Blocker.ITEM_CATEGORY: (
+        IN_USE_ITEM_CATEGORY,
+        "The record is linked to an active item category, so it can't be deleted.",
+    ),
+}
+VALIDATION_DETAIL = "The request isn't valid; see errors for each problem."
 
 
 class ProblemError(Exception):
@@ -149,6 +173,36 @@ def error_entry(error: Mapping[str, Any]) -> ProblemErrorEntry:
     return ProblemErrorEntry(detail=error["msg"], pointer=pointer)
 
 
+def domain_problem(error: DomainError) -> ProblemError:
+    """Return the problem a domain error is reported as.
+
+    Args:
+        error: The domain error raised below the API.
+
+    Returns:
+        The problem for the error.
+
+    Raises:
+        DomainError: The error itself, if it has no problem yet, so it's
+            reported as an unexpected error.
+    """
+    match error:
+        case InUseError(blocked_by=blocker):
+            return ProblemError(*IN_USE_PROBLEMS[blocker])
+        case ArchivedError():
+            return ProblemError(
+                ARCHIVED, "The record is archived; unarchive it before changing it."
+            )
+        case TypeChangeError():
+            entry = ProblemErrorEntry(
+                detail="A transaction category's type can't be changed.",
+                pointer="/type",
+            )
+            return ProblemError(VALIDATION, VALIDATION_DETAIL, errors=[entry])
+        case _:
+            raise error
+
+
 def add_problem_handlers(app: FastAPI) -> None:
     """Make every error the app returns a problem details response.
 
@@ -198,6 +252,19 @@ def add_problem_handlers(app: FastAPI) -> None:
         )
         return problem_response(problem, extensions=exc.extensions)
 
+    @app.exception_handler(DomainError)
+    async def handle_domain_error(request: Request, exc: DomainError) -> Response:
+        """Send a broken domain rule as its problem.
+
+        Args:
+            request: The request that failed.
+            exc: The domain error raised below the API.
+
+        Returns:
+            The problem response for the domain error.
+        """
+        return await handle_problem_error(request, domain_problem(exc))
+
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
@@ -224,7 +291,7 @@ def add_problem_handlers(app: FastAPI) -> None:
             type=VALIDATION.uri,
             title=VALIDATION.title,
             status=VALIDATION.status,
-            detail="The request isn't valid; see errors for each problem.",
+            detail=VALIDATION_DETAIL,
             errors=[error_entry(error) for error in errors],
         )
         return problem_response(problem)

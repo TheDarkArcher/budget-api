@@ -5,6 +5,8 @@ from uuid import UUID
 
 from sqlalchemy import Connection, text
 
+from app.repositories.errors import translate_constraint_errors
+
 
 class ItemCategoryRepository(ABC):
     """Interface for storing item categories."""
@@ -19,6 +21,9 @@ class ItemCategoryRepository(ABC):
 
         Returns:
             The new category's id.
+
+        Raises:
+            NameConflictError: If the user has another category with the name.
         """
 
 
@@ -42,12 +47,16 @@ class SQLItemCategoryRepository(ItemCategoryRepository):
 
         Returns:
             The new category's id.
+
+        Raises:
+            NameConflictError: If the user has another category with the name.
         """
-        category_id: UUID = self._connection.execute(
-            text(
-                "INSERT INTO item_categories (user_id, name)"
-                " VALUES (:user_id, :name) RETURNING id"
-            ),
-            {"user_id": user_id, "name": name},
-        ).scalar_one()
+        with translate_constraint_errors(self._connection):
+            category_id: UUID = self._connection.execute(
+                text(
+                    "INSERT INTO item_categories (user_id, name)"
+                    " VALUES (:user_id, :name) RETURNING id"
+                ),
+                {"user_id": user_id, "name": name},
+            ).scalar_one()
         return category_id
