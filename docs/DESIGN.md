@@ -306,8 +306,8 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#88-openapi) doc
 | DELETE | `/transactions/{id}` | Deletes the transaction |
 
 - **Rules:** the list order, the summary's totals and deleting follow [Transactions (Domain Rules)](#41-transactions); `itemCategory` and `item` are the two line orders in [Line Items](#42-line-items); the link check on edits follows [Categories](#44-categories).
-- **Lines:** have an `id`, which stays the same across edits as [Line Items](#42-line-items) describes. A line `id` that isn't one of the transaction's lines gives 422 `/problems/invalid-reference`; a line `id` repeated in a PUT, or sent on POST, gives 422 `/problems/validation`. POST and PUT return lines in the default order. An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
-- **Archived references:** follow [Archiving and Deleting](#46-archiving-and-deleting); an archived one those rules don't allow gives 422 `/problems/invalid-reference` with an `errors` entry pointing at its line.
+- **Lines:** have an `id`, which stays the same across edits as [Line Items](#42-line-items) describes. A line `id` that isn't one of the transaction's lines returns 422 `/problems/invalid-reference`; a line `id` repeated in a PUT, or sent on POST, returns 422 `/problems/validation`. POST and PUT return lines in the default order. An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
+- **Archived references:** follow [Archiving and Deleting](#46-archiving-and-deleting); an archived one those rules don't allow returns 422 `/problems/invalid-reference` with an `errors` entry pointing at its line.
 
 ### 8.3 Other
 
@@ -381,14 +381,14 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case (Pydantic `alias_generator=to_camel`, `populate_by_name=True`).
 - **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript. Money always has 2 decimal places; quantities and size values drop trailing zeros, such as `"1.35"` and `"500"`. Requests may send any decimal string within the limits, such as `"3.5"` or `"500.0"`, and size values are compared as numbers, so `"500"` and `"500.0"` are the same size.
 - **Filters:** on any list, an unknown, another user's or archived id in a filter only narrows the result, and a `from` date after `to` returns an empty list.
-- **Query parameters:** a malformed id in a query parameter, a value outside a parameter's allowed values or limits, or a parameter not marked repeatable sent twice gives 422 with a `parameter` entry.
+- **Query parameters:** a malformed id in a query parameter, a value outside a parameter's allowed values or limits, or a parameter not marked repeatable sent twice returns 422 with a `parameter` entry.
 - **Dates:** ISO-8601 (`2026-10-23`).
 - **Names:** trimmed of surrounding whitespace and 1–100 characters long.
 - **Notes:** transaction and line notes are at most 1000 characters long.
 - **Paging:** paged endpoints accept `page` (default 1, at least 1) and `pageSize` (default 25, from 1 to 200). A page past the end returns an empty `data` list, and an empty result has `totalPages` 0. To load a whole list, such as for a picker, a client requests each page in turn.
-- **Idempotency:** every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft, except that a repeat sent while the first request is still running waits for it rather than getting 409. A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
+- **Idempotency:** every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft, except that a repeat sent while the first request is still running waits for it rather than returning 409. A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
   - A repeat with the same key and the same request returns the original response again, without creating anything.
-  - The same key with a different request gives 422.
+  - The same key with a different request returns 422.
   - Only successful creates are stored: a request that fails stores nothing, so it can be corrected and retried with the same key.
 - **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query, path or header parameter. When a status code has more than one meaning (409 and 422), `type` is one of the problem types below so clients can tell them apart; otherwise it is `about:blank`.
   - The exception is `GET /health/ready` (at the root, outside `/api/v1`): it returns the same health body for both 200 and 503, with any failing check marked, so monitors only read one shape.
@@ -412,7 +412,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   2. Request validation, including the `Idempotency-Key` format (422, or 404 for a malformed path id).
   3. On a create sent with an `Idempotency-Key`, a stored response (replayed, or 422 on a mismatch).
   4. Finding the record (404).
-  5. Editing an archived record, or unarchiving an item whose item category is archived (409). So a PUT on an archived record that passes validation gives 409, whatever references or names its body holds.
+  5. Editing an archived record, or unarchiving an item whose item category is archived (409). So a PUT on an archived record that passes validation returns 409, whatever references or names its body holds.
   6. A different `type` on a transaction category's PUT (422).
   7. References (422).
   8. The item category link rule (422).
