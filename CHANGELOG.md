@@ -35,8 +35,16 @@ Breaking changes are listed under their own **Breaking** heading.
   upgrading the database, and `uv run poe seed` does the same outside Docker.
   Seeding again leaves the existing dummy user unchanged.
 - `GET /api/v1/me`, which returns the current user's id and name. Every
-  request to `/api/v1` acts as the dummy user, and is refused with 403 if
-  the dummy user doesn't exist.
+  request to a versioned API path, such as `/api/v1`, acts as the dummy
+  user. If the dummy user doesn't exist, the request is refused with a 403
+  problem before it is routed or parsed, whatever else is wrong with it.
+- Error responses as RFC 9457 problem details (`application/problem+json`),
+  documented in `openapi.json`. 409 and 422 responses carry a named `type`,
+  such as `/problems/name-conflict` or `/problems/validation`, so clients
+  can tell them apart; every other status uses `about:blank`. Validation
+  problems list each problem in an `errors` entry that points into the body
+  or names the parameter. A malformed id in the path returns 404, and an
+  unexpected error returns a 500 problem with no internal detail.
 - Database backups: `uv run poe backup` dumps the database to a timestamped
   file in `backups/`. Dumps are readable only by their owner.
 - Database restores: `uv run poe restore <file>` restores a dump. A restore
