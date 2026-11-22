@@ -1,17 +1,31 @@
 """Dependencies shared by the API's endpoints."""
 
-import logging
+from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Request
 from sqlalchemy import Connection
 
-from app.core.dummy_user import DUMMY_USER_ID
-from app.database.engine import get_connection
 from app.repositories.users import SQLUserRepository, User, UserRepository
-from app.services.users import get_user
 
-logger = logging.getLogger(__name__)
+
+def get_connection(request: Request) -> Iterator[Connection]:
+    """Provide the request's connection, in a savepoint for the endpoint's work.
+
+    The current-user resolver opens the connection and its transaction. The
+    savepoint rolls back if the endpoint raises, so a failed request keeps
+    none of its writes even though the resolver's transaction commits.
+
+    Args:
+        request: The request, after the current-user resolver has run.
+
+    Yields:
+        The request's database connection.
+    """
+    connection: Connection = request.state.connection
+    with connection.begin_nested():
+        yield connection
+
 
 ConnectionDep = Annotated[Connection, Depends(get_connection)]
 
@@ -31,27 +45,16 @@ def get_user_repository(connection: ConnectionDep) -> UserRepository:
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
 
 
-def get_current_user(user_repo: UserRepositoryDep) -> User:
-    """Resolve the user the request acts as.
-
-    Every request acts as the dummy user until real authentication exists.
-    This is the only place that decides who the current user is, so adding
-    authentication only means replacing this function.
+def get_current_user(request: Request) -> User:
+    """Provide the user the current-user resolver found for the request.
 
     Args:
-        user_repo: The repository to look the current user up in.
+        request: The request, after the current-user resolver has run.
 
     Returns:
         The current user.
-
-    Raises:
-        HTTPException: 403 if the user doesn't exist, e.g. because the
-            database hasn't been seeded.
     """
-    user = get_user(user_repo, DUMMY_USER_ID)
-    if user is None:
-        logger.warning("The dummy user doesn't exist; has the database been seeded?")
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorised")
+    user: User = request.state.user
     return user
 
 

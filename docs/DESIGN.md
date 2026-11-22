@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-20 |
+| **Last updated** | 2026-11-23 |
 
 ---
 
@@ -148,10 +148,10 @@ flowchart LR
   - **Handlers:** parse requests and shape responses.
   - **Services:** hold the business rules, as marked in [Domain Rules](#4-domain-rules).
   - **Data access:** runs hand-written SQL. Services depend on data-access interfaces, not on the SQL implementations, and are given the implementations by their caller; in the API layer, a FastAPI dependency builds them for each request. All the implementations used for one unit of work share a single connection, so the business rules in a service run in one database transaction.
-  - **Current-user resolver:** runs in front of every request (the Milestone 1 stub).
+  - **Current-user resolver:** runs in front of every request to a versioned API path (`/api/v1`, `/api/v2` and so on), first in the error order in [Conventions](#87-conventions). In Milestone 1 it resolves every request to the seeded dummy user, the stub that Milestone 3's authentication replaces. It looks the user up on the same database connection the request's data-access implementations use, so a request still uses one database connection. The endpoints outside the versioned API paths, listed in [API Design](#8-api-design), don't need a current user.
 - **Database:** the single source of truth; schema managed with versioned migrations.
 - **Containers:** Docker Compose runs PostgreSQL and the backend, as described in [Local Development](#96-local-development).
-- **CORS:** allowed origins come from `CORS_ALLOWED_ORIGINS`.
+- **CORS:** allowed origins come from `CORS_ALLOWED_ORIGINS`. Preflight requests are answered before the current-user resolver, and every response, errors included, carries the CORS headers.
 - **Configuration:** environment variables, documented in a committed `.env.example`.
 
 ---
@@ -269,7 +269,7 @@ erDiagram
 
 ## 8. API Design
 
-All endpoints sit under **`/api/v1`** and are scoped to the current user.
+Except for the [Health](#84-health) endpoints and the [OpenAPI](#88-openapi) documents, all endpoints sit under **`/api/v1`** and are scoped to the current user.
 
 ### 8.1 Lookup Resources
 `transaction-categories`, `item-categories`, `payees`, `tags`, `items`
@@ -408,7 +408,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   | `/problems/idempotency-key-mismatch` | 422 | An `Idempotency-Key` reused with a different request |
 
 - **Error order:** when a request has several problems, the first one found decides the response. They are checked in this order:
-  1. The current user (403).
+  1. The current user (403). This is checked before the request is routed or parsed, so without a current user every request to a [versioned API path](#5-architecture) returns 403, even one whose body isn't valid JSON or whose path or method is unknown.
   2. Request validation, including the `Idempotency-Key` format (422, or 404 for a malformed path id).
   3. On a create sent with an `Idempotency-Key`, a stored response (replayed, or 422 on a mismatch).
   4. Finding the record (404).
@@ -542,7 +542,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 
 | Question | When it matters |
 |---|---|
-| Authentication approach: cookie sessions or tokens, password hashing, replacing the stub resolver | Milestone 3 |
+| Authentication approach: cookie sessions or tokens, password hashing, replacing the dummy-user stub | Milestone 3 |
 | Whether CSV imports and heavy analysis run inside the request or as background jobs | Milestone 4 |
 | Deployment target and pipeline behind the `staging` and `production` branches | Later |
 | Enforcing these rules, which only services enforce today, with database triggers as well: at least one line per transaction, the item-category link rule ([Transactions](#41-transactions)), an active item keeping an active size ([Items](#43-items)), an item category being saved with a link ([Categories](#44-categories)), an archived record not being newly used on a transaction, and an item not being created in or unarchived into an archived item category ([Archiving and Deleting](#46-archiving-and-deleting)) | Any time |
