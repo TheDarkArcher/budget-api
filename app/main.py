@@ -1,12 +1,28 @@
 """FastAPI application factory."""
 
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api import health, v1
-from app.api.problems import add_problem_handlers
+from app.api.problems import add_problem_handlers, document_problem_responses
 from app.core.config import get_settings
+
+
+class BudgetAPI(FastAPI):
+    """The application, with its error responses documented as problem details."""
+
+    def openapi(self) -> dict[str, Any]:
+        """Generate the OpenAPI schema once, documenting errors as problems.
+
+        Returns:
+            The OpenAPI schema.
+        """
+        if self.openapi_schema is None:
+            self.openapi_schema = document_problem_responses(super().openapi())
+        return self.openapi_schema
 
 
 def create_app() -> FastAPI:
@@ -22,7 +38,9 @@ def create_app() -> FastAPI:
         pydantic.ValidationError: If the settings are missing or invalid.
     """
     settings = get_settings()
-    app = FastAPI(title="Budget Tracker API", version=settings.app_build or __version__)
+    app = BudgetAPI(
+        title="Budget Tracker API", version=settings.app_build or __version__
+    )
     # Added before CORS, so CORS wraps it and a 500 problem is readable by
     # the frontend too.
     add_problem_handlers(app)
