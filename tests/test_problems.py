@@ -14,7 +14,12 @@ from problems import assert_problem, without_error_details
 from sqlalchemy import Connection
 
 from app.api import v1
-from app.api.problems import INVALID_REFERENCE, NAME_CONFLICT, ProblemError
+from app.api.problems import (
+    INVALID_REFERENCE,
+    NAME_CONFLICT,
+    ProblemError,
+    documented_problem,
+)
 from app.core.errors import (
     ArchivedError,
     Blocker,
@@ -117,6 +122,12 @@ def probe_client(
     )
     v1.router.add_api_route("/test/things/{thing_id}", replace_thing, methods=["PUT"])
     v1.router.add_api_route("/test/domain-error", raise_domain_error, methods=["POST"])
+    v1.router.add_api_route(
+        "/test/documented-conflict",
+        conflict,
+        methods=["POST"],
+        responses={409: documented_problem("The name is already in use")},
+    )
     app = create_app()
 
     # A savepoint per request, as in conftest.py's app fixture.
@@ -380,3 +391,48 @@ def test_domain_error_is_its_problem(
     response = probe_client.post("/api/v1/test/domain-error", params={"kind": kind})
     problem_body = assert_problem(response, expected["status"])
     assert problem_body == expected
+
+
+def test_declared_problem_response_is_documented_as_problem_json(
+    probe_client: TestClient,
+) -> None:
+    paths = probe_client.get("/openapi.json").json()["paths"]
+    responses = paths["/api/v1/test/documented-conflict"]["post"]["responses"]
+    assert responses["409"] == {
+        "description": "The name is already in use",
+        "content": {
+            "application/problem+json": {
+                "schema": {"$ref": "#/components/schemas/Problem"}
+            }
+        },
+    }
+
+
+def test_validation_failure_is_documented_as_a_problem(
+    probe_client: TestClient,
+) -> None:
+    document = probe_client.get("/openapi.json").json()
+    responses = document["paths"]["/api/v1/test/body"]["post"]["responses"]
+    assert responses["422"] == {
+        "description": "Validation Error",
+        "content": {
+            "application/problem+json": {
+                "schema": {"$ref": "#/components/schemas/Problem"}
+            }
+        },
+    }
+    assert "HTTPValidationError" not in document["components"]["schemas"]
+    assert "ValidationError" not in document["components"]["schemas"]
+
+
+def test_problem_schema_documents_members_as_sent(probe_client: TestClient) -> None:
+    # Unset members are left out of a problem rather than sent as null, and
+    # `type` is always sent.
+    schemas = probe_client.get("/openapi.json").json()["components"]["schemas"]
+    problem, entry = schemas["Problem"], schemas["ProblemErrorEntry"]
+    assert problem["required"] == ["type", "title", "status", "detail"]
+    assert "default" not in problem["properties"]["type"]
+    assert problem["properties"]["errors"]["type"] == "array"
+    assert entry["required"] == ["detail"]
+    assert entry["properties"]["pointer"]["type"] == "string"
+    assert entry["properties"]["parameter"]["type"] == "string"

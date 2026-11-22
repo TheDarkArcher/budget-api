@@ -45,5 +45,11 @@ def test_is_documented_with_its_responses(client: TestClient) -> None:
     operation = client.get("/openapi.json").json()["paths"][PATH]["get"]
     success = operation["responses"]["200"]["content"]["application/json"]
     assert success["schema"] == {"$ref": "#/components/schemas/UserResponse"}
-    forbidden = operation["responses"]["403"]
-    assert forbidden["description"] == "The current user is not authorised"
+    assert operation["responses"]["403"] == {
+        "description": "The current user is not authorised",
+        "content": {
+            "application/problem+json": {
+                "schema": {"$ref": "#/components/schemas/Problem"}
+            }
+        },
+    }
