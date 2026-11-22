@@ -509,14 +509,7 @@ def test_rejects_non_positive_item_sizes(
 def test_rejects_blank_names(
     connection: Connection, alice: World, sql: str, name: str
 ) -> None:
-    fails(
-        connection,
-        errors.CheckViolation,
-        sql,
-        user=alice.user,
-        name=name,
-        item_category=alice.item_category,
-    )
+    fails(connection, errors.CheckViolation, sql, name=name, **vars(alice))
 
 
 def test_item_sizes_keep_fractional_values(
