@@ -51,6 +51,15 @@ def test_preflight_from_other_origin_is_refused(cors_client: TestClient) -> None
     assert "access-control-allow-origin" not in response.headers
 
 
+def test_preflight_to_the_api_needs_no_current_user(cors_client: TestClient) -> None:
+    response = cors_client.options(
+        "/api/v1/me",
+        headers={"Origin": ALLOWED, "Access-Control-Request-Method": "GET"},
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == ALLOWED
+
+
 @pytest.mark.parametrize("method", ["GET", "POST", "PUT", "PATCH", "DELETE"])
 def test_preflight_for_method_in_the_api_is_allowed(
     cors_client: TestClient, method: str

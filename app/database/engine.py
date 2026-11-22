@@ -1,6 +1,7 @@
 """Database engine and connections."""
 
-from collections.abc import Iterator
+from collections.abc import Generator
+from contextlib import contextmanager
 from functools import lru_cache
 
 from sqlalchemy import URL, Connection, Engine, create_engine, make_url, text
@@ -75,10 +76,11 @@ def get_ping_engine() -> Engine:
     )
 
 
-def get_connection() -> Iterator[Connection]:
-    """Provide a connection in a transaction for one request.
+@contextmanager
+def open_connection() -> Generator[Connection]:
+    """Open a connection in a transaction for one request.
 
-    The transaction commits if the request succeeds and rolls back if it
+    The transaction commits if the request finishes and rolls back if it
     raises.
 
     Yields:

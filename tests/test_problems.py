@@ -1,7 +1,8 @@
 """Tests for the problem+json error responses of ``/api/v1``."""
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from typing import Annotated, Any
@@ -27,7 +28,6 @@ from app.core.errors import (
     InUseError,
     TypeChangeError,
 )
-from app.database.engine import get_connection
 from app.main import create_app
 from app.schemas.base import ApiModel
 from app.schemas.problems import ProblemErrorEntry
@@ -128,15 +128,14 @@ def probe_client(
         methods=["POST"],
         responses={409: documented_problem("The name is already in use")},
     )
-    app = create_app()
 
     # A savepoint per request, as in conftest.py's app fixture.
-    def override() -> Iterator[Connection]:
+    @contextmanager
+    def open_savepoint() -> Generator[Connection]:
         with connection.begin_nested():
             yield connection
 
-    app.dependency_overrides[get_connection] = override
-    with TestClient(app) as client:
+    with TestClient(create_app(open_connection=open_savepoint)) as client:
         yield client
 
 
@@ -317,6 +316,48 @@ def test_well_formed_path_id_still_gets_body_validation(
         "status": 422,
         "detail": "The request isn't valid; see errors for each problem.",
         "errors": [{"pointer": "/pageSize"}, {"pointer": "/sizes"}],
+    }
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "request_options"),
+    [
+        pytest.param(
+            "POST", "/api/v1/test/body", {"json": {"pageSize": "many"}}, id="body"
+        ),
+        pytest.param(
+            "POST",
+            "/api/v1/test/body",
+            {
+                "content": b'{"pageSize": ',
+                "headers": {"Content-Type": "application/json"},
+            },
+            id="malformed-json",
+        ),
+        pytest.param(
+            "GET",
+            "/api/v1/test/parameters",
+            {"params": {"pageSize": "many"}, "headers": {"Idempotency-Key": "long"}},
+            id="parameters",
+        ),
+        pytest.param(
+            "PUT", "/api/v1/test/things/not-an-id", {"json": {}}, id="path-id"
+        ),
+    ],
+)
+def test_missing_current_user_is_forbidden_ahead_of_validation(
+    probe_client: TestClient,
+    method: str,
+    path: str,
+    request_options: dict[str, Any],
+) -> None:
+    response = probe_client.request(method, path, **request_options)
+    problem_body = assert_problem(response, 403)
+    assert problem_body == {
+        "type": "about:blank",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Not authorised",
     }
 
 

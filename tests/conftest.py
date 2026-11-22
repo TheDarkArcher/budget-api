@@ -1,6 +1,7 @@
 """Shared fixtures: Postgres container, migrations, test client and fakes."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ from testcontainers.community.postgres import PostgresContainer
 
 from app.core.config import Settings, get_settings
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
-from app.database.engine import get_connection, get_engine, get_ping_engine
+from app.database.engine import get_engine, get_ping_engine
 from app.main import create_app
 from app.repositories.users import SQLUserRepository
 
@@ -87,15 +88,14 @@ def alembic_config() -> Callable[[Connection], Config]:
 
 @pytest.fixture
 def app(connection: Connection) -> FastAPI:
-    # A savepoint per request, so a failed request rolls back its writes
-    # as get_connection's transaction does.
-    def override() -> Iterator[Connection]:
+    # A savepoint per request, so the request's writes are kept or rolled
+    # back as open_connection's transaction does.
+    @contextmanager
+    def open_savepoint() -> Generator[Connection]:
         with connection.begin_nested():
             yield connection
 
-    app = create_app()
-    app.dependency_overrides[get_connection] = override
-    return app
+    return create_app(open_connection=open_savepoint)
 
 
 @pytest.fixture
