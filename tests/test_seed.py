@@ -1,7 +1,7 @@
 """Tests for the seed script, against the real database."""
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -50,7 +50,7 @@ class SavepointEngine:
     connection: Connection
 
     @contextmanager
-    def begin(self) -> Iterator[Connection]:
+    def begin(self) -> Generator[Connection]:
         with self.connection.begin_nested():
             yield self.connection
 
