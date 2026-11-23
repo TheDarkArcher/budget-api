@@ -70,10 +70,16 @@ not report issues in untouched text unless a change makes them worse.
   diff, and report the check as PASS or FAIL
 - Any other AGENTS.md rule that applies to the changed document
 
-### Clarity
+### Readability
+Read each changed passage as a newcomer would, and flag what slows them down:
+- A sentence or bullet that stacks several rules or clauses. Split it, or list the
+  rules as sub-bullets under a lead-in
+- A table cell that holds more than a short note. Move the detail out of the table
+- Text whose removal wouldn't change what a reader does: a reason, a consequence
+  that follows from the rule ("…, so …"), or a lead-in sentence that only restates
+  its heading. Propose the shorter wording
 - References a reader could resolve two ways, such as "it", "there" or "step 1" when
   more than one thing could be meant
-- A rule without the reason a reader would need to avoid working around it
 
 Use Bash only for read-only commands (`git diff`, `git log`, `git show`, `git status`,
 `ls`). Do not run commands that change files, the git state or the database.
@@ -86,7 +92,7 @@ Group findings by severity, most severe first:
   broken workflow if followed; must fix
 - **Warning** — inaccuracies, contradictions and rule violations from AGENTS.md, the
   skills or DESIGN.md; should fix
-- **Suggestion** — clarity and style improvements
+- **Suggestion** — readability and style improvements
 
 For each finding give:
 - `file_path:line`
