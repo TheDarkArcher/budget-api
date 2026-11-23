@@ -1,11 +1,11 @@
 ---
 name: accepted-operation-id-decisions
-description: Maintainer decisions on the DESIGN.md 8.8 operation id table (2026-11-23); don't re-raise
+description: Maintainer decisions on the DESIGN.md 8.10 operation id table (2026-11-23); don't re-raise
 metadata:
   type: project
 ---
 
-- The operation id rule in DESIGN.md 8.8 does not spell out irregular plural to
+- The operation id rule in DESIGN.md 8.10 does not spell out irregular plural to
   singular conversions (such as `categories` to `category`). The maintainer
   declined to add them; the rule's own example `createItemCategory` is enough.
 - A verb rule for non-GET paths that aren't resources is deferred until such an
