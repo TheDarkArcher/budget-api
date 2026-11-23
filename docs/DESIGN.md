@@ -148,7 +148,7 @@ flowchart LR
   - **Handlers:** parse requests and shape responses.
   - **Services:** hold the business rules, as marked in [Domain Rules](#4-domain-rules).
   - **Data access:** runs hand-written SQL. Services depend on data-access interfaces, not on the SQL implementations, and are given the implementations by their caller; in the API layer, a FastAPI dependency builds them for each request. All the implementations used for one unit of work share a single connection, so the business rules in a service run in one database transaction.
-  - **Current-user resolver:** runs in front of every request to a versioned API path (`/api/v1`, `/api/v2` and so on), first in the error order in [Conventions](#87-conventions). In Milestone 1 it resolves every request to the seeded dummy user, the stub that Milestone 3's authentication replaces. It looks the user up on the same database connection the request's data-access implementations use, so a request still uses one database connection. The endpoints outside the versioned API paths, listed in [API Design](#8-api-design), don't need a current user.
+  - **Current-user resolver:** runs in front of every request to a versioned API path (`/api/v1`, `/api/v2` and so on), first in the error order in [Errors](#89-errors). In Milestone 1 it resolves every request to the seeded dummy user, the stub that Milestone 3's authentication replaces. It looks the user up on the same database connection the request's data-access implementations use, so a request still uses one database connection. The endpoints outside the versioned API paths, listed in [API Design](#8-api-design), don't need a current user.
 - **Database:** the single source of truth; schema managed with versioned migrations.
 - **Containers:** Docker Compose runs PostgreSQL and the backend, as described in [Local Development](#96-local-development).
 - **CORS:** allowed origins come from `CORS_ALLOWED_ORIGINS`. Preflight requests are answered before the current-user resolver, and every response, errors included, carries the CORS headers.
@@ -269,45 +269,81 @@ erDiagram
 
 ## 8. API Design
 
-Except for the [Health](#84-health) endpoints and the [OpenAPI](#88-openapi) documents, all endpoints sit under **`/api/v1`** and are scoped to the current user.
+Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) documents, all endpoints sit under **`/api/v1`** and are scoped to the current user.
 
 ### 8.1 Lookup Resources
 `transaction-categories`, `item-categories`, `payees`, `tags`, `items`
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/{resource}` | Paged. `?q=` name search (contains, ignoring case; trimmed, and ignored when blank; at most 100 characters after trimming); `?archived=false\|true\|all` (default `false`); `?sort=` and `?order=asc\|desc` (default ordered case-insensitively by name, ascending, with ties broken by `id` in the same order) |
-| POST | `/{resource}` | Create. 409 if the name exists (archived records included) |
-| GET | `/{resource}/{id}` | One record, archived or not |
-| PUT | `/{resource}/{id}` | Replace the record, including the links it owns. 409 if the name exists on a different record or the record is archived. `archivedAt` is ignored |
-| DELETE | `/{resource}/{id}` | 409 if still referenced |
-| POST | `/{resource}/{id}/archive` | Returns the record. Archiving an archived record changes nothing. Not for tags |
-| POST | `/{resource}/{id}/unarchive` | Returns the record. Unarchiving an active record changes nothing. Not for tags |
+| Method | Path | Notes | Problems |
+|---|---|---|---|
+| GET | `/{resource}` | Paged list | |
+| POST | `/{resource}` | Create | `/problems/name-conflict`, `/problems/idempotency-key-mismatch` |
+| GET | `/{resource}/{id}` | One record, archived or not | |
+| PUT | `/{resource}/{id}` | Replace the record, including the links it owns. `archivedAt` is ignored | `/problems/archived`, `/problems/name-conflict` |
+| DELETE | `/{resource}/{id}` | Delete the record | `/problems/in-use/*` |
+| POST | `/{resource}/{id}/archive` | Returns the record. Archiving an archived record changes nothing. Not for tags | |
+| POST | `/{resource}/{id}/unarchive` | Returns the record. Unarchiving an active record changes nothing. Not for tags | `/problems/parent-archived/item-category` (items only) |
 
-- **Archive time:** each record except a tag has an `archivedAt` field holding its archive time (see [Archiving and Deleting](#46-archiving-and-deleting)), which is `null` while the record is active.
-- **Transaction categories:** `type` is set on create; a different `type` on PUT returns 422, except on an archived category, which returns 409 as any edit to an archived record does. Filter `?type=`.
-- **Item categories:** take `transactionCategoryIds` (at least one, otherwise 422) and return the linked `transactionCategories` that are active, whether or not the item category itself is archived, so the list is empty while all of them are archived or after they are deleted, and the item category can't be used on a transaction until one is unarchived or a PUT links another. Links to archived transaction categories are never listed, can't be changed by a PUT and stay in place; the `?transactionCategoryId=` filter finds the item categories that still have such links. Filter `?transactionCategoryId=`.
-- **Items:** take `itemCategoryId`, optional `tagIds` (left out means none) and `sizes` (at least one, otherwise 422), and return active sizes only, or for an archived item the sizes archived with it. Filters `?itemCategoryId=` and `?tagId=` (both repeatable: a repeated filter matches an item that has any one of the values given, and an item must satisfy every filter given) and `?transactionCategoryId=`. `?sort=` accepts `name` or `itemCategory` (ordered case-insensitively by item category name, then item name) on items, and only `name` on every other lookup. Unarchiving an item whose item category is archived returns 409.
-- **Item sizes:** managed through `sizes` on `POST /items` and `PUT /items/{id}`, and identified by their value and unit, with values compared as numbers, so `"500"` and `"500.0"` are the same size; a size's `id` and `archivedAt` in a request body are ignored. They follow the size rules in [Archiving and Deleting](#46-archiving-and-deleting). `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`, takes `?archived=false|true|all` (default `false`, so an archived item's sizes need `true` or `all`) and isn't paged, so `?archived=all` shows whether a size removed by PUT was archived or deleted.
-- **Tags:** deleted rather than archived, so they take no `?archived=` and have no `archivedAt`.
-- **References:** an unknown or archived id in a request body returns 422, as does a repeated id or size.
-- **Filtering by transaction category:** on item categories and items, `?transactionCategoryId=` matches through the item category's links, including links that don't currently apply because either category is archived, so archived records can still be found by transaction category.
-- **Responses:** related records are nested as references: objects with `id`, `name` and `archivedAt`, and nested transaction categories also carry `type`. Sizes carry their `id`, value, unit and `archivedAt`, and tags only their `id` and `name`. Nested lists, such as an item's tags, are ordered case-insensitively by name, then `id`.
+- **Problems column:** lists the problem types specific to each endpoint. It leaves out `/problems/validation`, which almost any request can raise, and `/problems/invalid-reference`, which any write with ids in its body can raise; both are in [Errors](#89-errors).
+- **List parameters:**
+  - `?q=` searches names, matching any name that contains it, ignoring case. It is trimmed, ignored when blank, and at most 100 characters after trimming.
+  - `?archived=false|true|all`, default `false`.
+  - `?sort=` and `?order=asc|desc`. Lists are ordered case-insensitively by name, ascending, by default, with ties broken by `id` in the same order.
+- **Archive time:** every record except a tag has an `archivedAt` field, `null` while the record is active, holding its archive time as [Archiving and Deleting](#46-archiving-and-deleting) describes.
+- **Transaction categories:**
+  - `type` is set on create and can't be changed by a PUT.
+  - Filter `?type=`.
+- **Item categories:**
+  - Take `transactionCategoryIds`, at least one.
+  - Return the linked `transactionCategories` that are active, whether or not the item category itself is archived.
+  - While none of its linked transaction categories are active, the list is empty and the item category can't be used on a transaction until one is unarchived or a PUT links another.
+  - Links to archived transaction categories are never listed, can't be changed by a PUT and stay in place.
+  - Filter `?transactionCategoryId=`.
+- **Items:**
+  - Take `itemCategoryId`, optional `tagIds` (left out means none) and `sizes`, at least one.
+  - Return active sizes only, or for an archived item the sizes archived with it.
+  - Filters `?itemCategoryId=`, `?tagId=` and `?transactionCategoryId=`.
+  - `?itemCategoryId=` and `?tagId=` are repeatable. A repeated filter matches an item that has any one of the values given, and an item must match every filter given.
+  - `?sort=` accepts `name` or `itemCategory`, which orders case-insensitively by item category name, then item name. Every other lookup accepts only `name`.
+- **Item sizes:**
+  - Managed through `sizes` on `POST /items` and `PUT /items/{id}`, following the size rules in [Archiving and Deleting](#46-archiving-and-deleting).
+  - A size is identified by its value and unit, with values compared as numbers: `"500"` and `"500.0"` are the same size.
+  - A size's `id` and `archivedAt` in a request body are ignored.
+  - `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`. It isn't paged and takes `?archived=false|true|all`, default `false`.
+- **Tags:** deleted rather than archived. They take no `?archived=` and have no `archivedAt`.
+- **Filtering by transaction category:** on item categories and items, `?transactionCategoryId=` matches through the item category's links, including links that don't apply while either category is archived.
+- **Responses:**
+  - Related records are nested as references: objects with `id`, `name` and `archivedAt`, plus `type` on transaction categories.
+  - Sizes carry their `id`, value, unit and `archivedAt`.
+  - Tags carry only their `id` and `name`.
+  - Nested lists, such as an item's tags, are ordered case-insensitively by name, then `id`.
 
 ### 8.2 Transactions
 
-| Method | Path | Notes |
-|---|---|---|
-| GET | `/transactions` | Filters `from` and `to` (inclusive, on `occurredOn`), `transactionCategoryId`, `type`; paging `page`, `pageSize`. Rows hold `id`, `occurredOn`, `type`, `total`, `lineCount`, and `transactionCategory` and `payee` as nested references |
-| POST | `/transactions` | Transaction and lines saved together in one database transaction. 422 with `/problems/validation` if there are no lines, or with `/problems/item-category-not-linked` if a line's item category is not linked to the transaction category (one `errors` entry per offending line, naming both categories) |
-| GET | `/transactions/summary` | The list's filters, including `type`; returns `incomeTotal`, `expenseTotal`, `net` and `transactionCount` |
-| GET | `/transactions/{id}` | Full transaction including lines, ordered according to `?lineSort=itemCategory\|item` (default `itemCategory`) |
-| PUT | `/transactions/{id}` | Replaces the transaction. Lines are matched by `id`: a line with an `id` is updated, one without is added, and a saved line left out is deleted. Same 422 rules as POST, except for the link check on edits |
-| DELETE | `/transactions/{id}` | Deletes the transaction |
+| Method | Path | Notes | Problems |
+|---|---|---|---|
+| GET | `/transactions` | Paged list | |
+| POST | `/transactions` | Create the transaction and its lines in one database transaction | `/problems/item-category-not-linked`, `/problems/idempotency-key-mismatch` |
+| GET | `/transactions/summary` | Totals for the transactions the filters match | |
+| GET | `/transactions/{id}` | The full transaction, including lines | |
+| PUT | `/transactions/{id}` | Replace the transaction and its lines | `/problems/item-category-not-linked` |
+| DELETE | `/transactions/{id}` | Delete the transaction and its lines | |
 
-- **Rules:** the list order, the summary's totals and deleting follow [Transactions (Domain Rules)](#41-transactions); `itemCategory` and `item` are the two line orders in [Line Items](#42-line-items); the link check on edits follows [Categories](#44-categories).
-- **Lines:** have an `id`, which stays the same across edits as [Line Items](#42-line-items) describes. A line `id` that isn't one of the transaction's lines returns 422 `/problems/invalid-reference`; a line `id` repeated in a PUT, or sent on POST, returns 422 `/problems/validation`. POST and PUT return lines in the default order. An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
-- **Archived references:** follow [Archiving and Deleting](#46-archiving-and-deleting); an archived one those rules don't allow returns 422 `/problems/invalid-reference` with an `errors` entry pointing at its line.
+- **Problems column:** lists the problem types specific to each endpoint, as in [Lookup Resources](#81-lookup-resources).
+- **Filters:** the list and the summary take `from` and `to` (inclusive, on `occurredOn`), `transactionCategoryId` and `type`.
+- **List rows:** `id`, `occurredOn`, `type`, `total`, `lineCount`, and `transactionCategory` and `payee` as nested references.
+- **Summary:** `incomeTotal`, `expenseTotal`, `net` and `transactionCount`.
+- **Lines:**
+  - Each line has an `id`, which stays the same across edits as [Line Items](#42-line-items) describes.
+  - A PUT matches lines by `id`: a line with an `id` is updated, one without is added, and a saved line left out is deleted.
+  - `GET /transactions/{id}` orders lines by `?lineSort=itemCategory|item`, default `itemCategory`. POST and PUT return lines in the default order.
+  - An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
+  - A `/problems/item-category-not-linked` response has one `errors` entry per offending line, naming both categories.
+- **Rules:**
+  - The list order, the summary's totals and deleting follow [Transactions (Domain Rules)](#41-transactions).
+  - `itemCategory` and `item` are the two line orders in [Line Items](#42-line-items).
+  - Archived references follow [Archiving and Deleting](#46-archiving-and-deleting).
+  - The link check on edits follows [Categories](#44-categories).
 
 ### 8.3 Other
 
@@ -321,7 +357,7 @@ At the root, outside `/api/v1`, and designed for use by a load balancer or orche
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/health/live` | Checks if the process responds. Does not check any subsystems, so a database outage never restarts the app |
-| GET | `/health/ready` | Checks the health of each subsystem. 200 when all pass, 503 when any fail |
+| GET | `/health/ready` | Checks the health of each subsystem. 200 when all pass, 503 when any fail. Both return the same health body, with any failing check marked, rather than a problem |
 
 Each readiness check has a 2-second deadline, enforced by a `connect_timeout` on the connection and a `statement_timeout` on the check query.
 
@@ -378,21 +414,62 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 ```
 
 ### 8.7 Conventions
-- **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case (Pydantic `alias_generator=to_camel`, `populate_by_name=True`).
-- **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript. Money always has 2 decimal places; quantities and size values drop trailing zeros, such as `"1.35"` and `"500"`. Requests may send any decimal string within the limits, such as `"3.5"` or `"500.0"`. A request's string is trimmed of surrounding whitespace and holds only digits and an optional decimal point with a digit on each side.
-- **Filters:** on any list, an unknown, another user's or archived id in a filter only narrows the result, and a `from` date after `to` returns an empty list.
-- **Query parameters:** a malformed id in a query parameter, a value outside a parameter's allowed values or limits, or a parameter not marked repeatable sent twice returns 422 with a `parameter` entry.
+- **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case.
+- **Decimal numbers:**
+  - Sent as JSON strings in requests and responses.
+  - A request's string is trimmed of surrounding whitespace.
+  - The string holds only digits and an optional decimal point with a digit on each side, such as `"3.5"` or `"500.0"`.
+  - The value must be within the field's limits outlined in [Domain Rules](#4-domain-rules).
+  - Responses always format money with 2 decimal places, such as `"3.50"`.
+  - Responses drop trailing zeros from all other decimal numbers, such as `"1.35"` and `"500"`.
+- **Query parameters:**
+  - An id must be well-formed.
+  - A value must be within the parameter's allowed values or limits.
+  - Only a parameter marked repeatable may be sent more than once.
+- **Filters:**
+  - On any list, an unknown, another user's or archived id in a filter only narrows the result.
+  - A `from` date after `to` returns an empty list.
 - **Dates:** ISO-8601 (`2026-10-23`).
 - **Names:** trimmed of surrounding whitespace and 1–100 characters long.
 - **Notes:** transaction and line notes are at most 1000 characters long.
-- **Paging:** paged endpoints accept `page` (default 1, at least 1) and `pageSize` (default 25, from 1 to 200). A page past the end returns an empty `data` list, and an empty result has `totalPages` 0. To load a whole list, such as for a picker, a client requests each page in turn.
-- **Idempotency:** every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft, except that a repeat sent while the first request is still running waits for it rather than returning 409. A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
-  - A repeat with the same key and the same request returns the original response again, without creating anything.
-  - The same key with a different request returns 422.
-  - Only successful creates are stored: a request that fails stores nothing, so it can be corrected and retried with the same key.
-- **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query or header parameter. When a status code has more than one meaning (409 and 422), `type` is one of the problem types below so clients can tell them apart; otherwise it is `about:blank`.
-  - The exception is `GET /health/ready` (at the root, outside `/api/v1`): it returns the same health body for both 200 and 503, with any failing check marked, so monitors only read one shape.
-- **Problem types:**
+- **Paging:**
+  - Paged endpoints accept `page` (default 1, at least 1) and `pageSize` (default 25, from 1 to 200).
+  - A page past the end returns an empty `data` list.
+  - An empty result has `totalPages` 0.
+  - Paging can't be turned off.
+- **Idempotency:**
+  - Every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft.
+  - A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
+  - A repeat with the same key and request returns the original response.
+  - A repeat sent while the first request is still running waits for it, where the draft would return 409.
+  - The same key with a different request is rejected with `/problems/idempotency-key-mismatch`.
+  - Only successful creates are stored.
+
+### 8.8 Status Codes
+
+| Code | Used for |
+|---|---|
+| 200 | Successful read, update, archive or unarchive |
+| 201 | Created, with a `Location` header holding the new record's path, such as `/api/v1/payees/{id}` |
+| 204 | Successful delete |
+| 403 | No current user |
+| 404 | Not found, **including another user's records** (never reveals they exist), or a malformed id in the path |
+| 409 | Any 409 problem type in [Errors](#89-errors) |
+| 422 | Any 422 problem type in [Errors](#89-errors) |
+
+### 8.9 Errors
+- **Format:** errors use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query or header parameter. A failing [readiness check](#84-health) is the exception: it returns the health body, not a problem.
+- **Error order:** when a request has several problems, the first one found decides the response. They are checked in this order:
+  1. The current user (403). This is checked before the request is routed or parsed, so without a current user every request to a [versioned API path](#5-architecture) returns 403, even one whose body isn't valid JSON or whose path or method is unknown.
+  2. Request validation, including the `Idempotency-Key` format (422, or 404 for a malformed path id).
+  3. On a create sent with an `Idempotency-Key`, a stored response (replayed, or 422 on a mismatch).
+  4. Finding the record (404).
+  5. Editing an archived record, or unarchiving an item whose item category is archived (409).
+  6. A different `type` on a transaction category's PUT (422).
+  7. References (422).
+  8. The item category link rule (422).
+  9. Name and in-use conflicts (409).
+- **Problem types:** when a status code has more than one meaning (409 and 422), `type` is one of the problem types below; otherwise it is `about:blank`.
 
   | Type | Status | Used for |
   |---|---|---|
@@ -402,38 +479,22 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   | `/problems/in-use/transaction` | 409 | Deleting a transaction category, payee or item that a transaction uses, even when a transaction category is also linked to an active item category |
   | `/problems/in-use/item-category` | 409 | Deleting an active transaction category linked to an active item category |
   | `/problems/in-use/item` | 409 | Deleting an item category that items use, archived items included |
-  | `/problems/validation` | 422 | A request that is malformed or breaks a rule, including an invalid query parameter, a different `type` on an active transaction category's PUT, a repeated id or size in a lookup body, or a line `id` repeated in a PUT or sent on POST |
+  | `/problems/validation` | 422 | A request that is malformed or breaks a rule, including any rule in [Conventions](#87-conventions) without a type of its own, a different `type` on an active transaction category's PUT, a repeated id or size in a lookup body, or a line `id` repeated in a PUT or sent on POST |
   | `/problems/invalid-reference` | 422 | An unknown or archived id in a request body, including a line `id` that isn't one of the transaction's lines, or an archived item size kept on a line after the transaction category changes |
   | `/problems/item-category-not-linked` | 422 | A transaction line whose item category isn't linked to the transaction category |
   | `/problems/idempotency-key-mismatch` | 422 | An `Idempotency-Key` reused with a different request |
 
-- **Error order:** when a request has several problems, the first one found decides the response. They are checked in this order:
-  1. The current user (403). This is checked before the request is routed or parsed, so without a current user every request to a [versioned API path](#5-architecture) returns 403, even one whose body isn't valid JSON or whose path or method is unknown.
-  2. Request validation, including the `Idempotency-Key` format (422, or 404 for a malformed path id).
-  3. On a create sent with an `Idempotency-Key`, a stored response (replayed, or 422 on a mismatch).
-  4. Finding the record (404).
-  5. Editing an archived record, or unarchiving an item whose item category is archived (409). So a PUT on an archived record that passes validation returns 409, whatever references or names its body holds.
-  6. A different `type` on a transaction category's PUT (422).
-  7. References (422).
-  8. The item category link rule (422).
-  9. Name and in-use conflicts (409).
-- **Status codes:**
 
-  | Code | Used for |
-  |---|---|
-  | 200 | Successful read, update, archive or unarchive |
-  | 201 | Created, with a `Location` header holding the new record's path, such as `/api/v1/payees/{id}` |
-  | 204 | Successful delete |
-  | 403 | No current user |
-  | 404 | Not found, **including another user's records** (never reveals they exist), or a malformed id in the path |
-  | 409 | Duplicate name, record still in use, editing an archived record, or unarchiving an item whose item category is archived |
-  | 422 | Validation failure, including unknown or archived references, a malformed or disallowed query parameter and an `Idempotency-Key` reused with a different request |
-
-### 8.8 OpenAPI
+### 8.10 OpenAPI
 - **Serving:** FastAPI serves `/openapi.json` and interactive docs at `/docs`.
 - **Export:** an exported `openapi.json` is committed to this repo; CI fails if it no longer matches the code.
-- **Operation ids:** every operation has an explicit camelCase `operationId`, so generated clients get readable method names. An id is a verb and the resource it acts on or what it returns, with the verb set by the method and path as in the table below, where `{resource}` is one of the resources in [Lookup Resources](#81-lookup-resources) or [Transactions (API Design)](#82-transactions), `{id}` is one of its records' ids, and `{subresource}` is a collection belonging to that record. The resource is named in PascalCase from its path segment, so `/item-categories` gives `listItemCategories` and `createItemCategory`.
-- **Summaries:** every operation also has a short, sentence-case `summary` that reads as its `operationId` in words, with an article for a single record, such as "List payees", "Create a payee" and "Get the current user".
+- **Operation ids:**
+  - Every operation has an explicit camelCase `operationId`.
+  - An id is a verb plus the resource it acts on or what it returns, with the verb set by the method and path as in the table below, where `{resource}` is one of the resources in [Lookup Resources](#81-lookup-resources) or [Transactions (API Design)](#82-transactions), `{id}` is one of that resource's record ids, and `{subresource}` is a collection belonging to that record.
+  - The resource is named in PascalCase from its path segment, such as `listItemCategories` and `createItemCategory` for `/item-categories`.
+- **Summaries:**
+  - Every operation has a short, sentence-case `summary` that reads as its `operationId` in words, such as "List payees".
+  - A summary for a single record takes an article, such as "Create a payee" and "Get the current user".
 - **Descriptions:** operation and field descriptions are written for clients, without docstring sections such as `Args:`.
 
 | Method and path | Operation id | Example |
@@ -478,7 +539,8 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 - **Pre-commit hooks:** none; checks run in CI only.
 
 ### 9.4 Git Workflow
-- **Branching:** GitLab Flow with environment branches (`main` → `staging` → `production`).
+- **Branching:**
+  - GitLab Flow with environment branches (`main` → `staging` → `production`).
   - Short-lived feature branches are merged to `main` through pull requests.
   - `staging` holds what is being verified for release; `production` holds what is released.
   - Changes only move downstream. Nothing is committed directly to `staging` or `production`.
