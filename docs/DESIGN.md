@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-23 |
+| **Last updated** | 2026-11-24 |
 
 ---
 
@@ -288,7 +288,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#88-openapi) doc
 - **Transaction categories:** `type` is set on create; a different `type` on PUT returns 422, except on an archived category, which returns 409 as any edit to an archived record does. Filter `?type=`.
 - **Item categories:** take `transactionCategoryIds` (at least one, otherwise 422) and return the linked `transactionCategories` that are active, whether or not the item category itself is archived, so the list is empty while all of them are archived or after they are deleted, and the item category can't be used on a transaction until one is unarchived or a PUT links another. Links to archived transaction categories are never listed, can't be changed by a PUT and stay in place; the `?transactionCategoryId=` filter finds the item categories that still have such links. Filter `?transactionCategoryId=`.
 - **Items:** take `itemCategoryId`, optional `tagIds` (left out means none) and `sizes` (at least one, otherwise 422), and return active sizes only, or for an archived item the sizes archived with it. Filters `?itemCategoryId=` and `?tagId=` (both repeatable: a repeated filter matches an item that has any one of the values given, and an item must satisfy every filter given) and `?transactionCategoryId=`. `?sort=` accepts `name` or `itemCategory` (ordered case-insensitively by item category name, then item name) on items, and only `name` on every other lookup. Unarchiving an item whose item category is archived returns 409.
-- **Item sizes:** managed through `sizes` on `POST /items` and `PUT /items/{id}`, and identified by their value and unit; a size's `id` and `archivedAt` in a request body are ignored. They follow the size rules in [Archiving and Deleting](#46-archiving-and-deleting). `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`, takes `?archived=false|true|all` (default `false`, so an archived item's sizes need `true` or `all`) and isn't paged, so `?archived=all` shows whether a size removed by PUT was archived or deleted.
+- **Item sizes:** managed through `sizes` on `POST /items` and `PUT /items/{id}`, and identified by their value and unit, with values compared as numbers, so `"500"` and `"500.0"` are the same size; a size's `id` and `archivedAt` in a request body are ignored. They follow the size rules in [Archiving and Deleting](#46-archiving-and-deleting). `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`, takes `?archived=false|true|all` (default `false`, so an archived item's sizes need `true` or `all`) and isn't paged, so `?archived=all` shows whether a size removed by PUT was archived or deleted.
 - **Tags:** deleted rather than archived, so they take no `?archived=` and have no `archivedAt`.
 - **References:** an unknown or archived id in a request body returns 422, as does a repeated id or size.
 - **Filtering by transaction category:** on item categories and items, `?transactionCategoryId=` matches through the item category's links, including links that don't currently apply because either category is archived, so archived records can still be found by transaction category.
@@ -379,7 +379,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 
 ### 8.7 Conventions
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case (Pydantic `alias_generator=to_camel`, `populate_by_name=True`).
-- **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript. Money always has 2 decimal places; quantities and size values drop trailing zeros, such as `"1.35"` and `"500"`. Requests may send any decimal string within the limits, such as `"3.5"` or `"500.0"`, and size values are compared as numbers, so `"500"` and `"500.0"` are the same size.
+- **Money and quantities:** strings (`"3.50"`) to avoid floating-point errors in JSON clients such as JavaScript. Money always has 2 decimal places; quantities and size values drop trailing zeros, such as `"1.35"` and `"500"`. Requests may send any decimal string within the limits, such as `"3.5"` or `"500.0"`. A request's string is trimmed of surrounding whitespace and holds only digits and an optional decimal point with a digit on each side.
 - **Filters:** on any list, an unknown, another user's or archived id in a filter only narrows the result, and a `from` date after `to` returns an empty list.
 - **Query parameters:** a malformed id in a query parameter, a value outside a parameter's allowed values or limits, or a parameter not marked repeatable sent twice returns 422 with a `parameter` entry.
 - **Dates:** ISO-8601 (`2026-10-23`).
