@@ -25,6 +25,9 @@ Breaking changes are listed under their own **Breaking** heading.
   version, e.g. `0.1.0-dev.11+23e3a68`.
 - The OpenAPI schema committed as `openapi.json`, with the plain version, so
   clients can generate their API types from it without running the API.
+- Every operation in the OpenAPI schema has an explicit camelCase
+  `operationId`, such as `getCurrentUser`, a short summary and a description
+  written for clients, so generated clients get readable method names.
 - User provisioning: a new user is given the default transaction categories
   (Salary, Groceries, Rent and Bills), item categories (Food & Drink,
   Household, Personal Care and General / Other) and the links between them.
@@ -43,7 +46,8 @@ Breaking changes are listed under their own **Breaking** heading.
   such as `/problems/name-conflict` or `/problems/validation`, so clients
   can tell them apart; every other status uses `about:blank`. Validation
   problems list each problem in an `errors` entry that points into the body
-  or names the parameter. A malformed id in the path returns 404, and an
+  or names the query or header parameter. A malformed id in the path returns
+  404, so an operation whose only input is its path documents no 422. An
   unexpected error returns a 500 problem with no internal detail.
 - Database backups: `uv run poe backup` dumps the database to a timestamped
   file in `backups/`. Dumps are readable only by their owner.
