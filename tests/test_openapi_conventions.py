@@ -32,6 +32,9 @@ DOCSTRING_SECTIONS = re.compile(
 )
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 VERSIONED_API_PATH = re.compile(r"^/api/v\d+(/|$)")
+PROBLEM_CONTENT = {
+    "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
+}
 DOCUMENT: dict[str, Any] = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
 OPERATIONS = [
     pytest.param(method, path, operation, id=f"{method} {path}")
@@ -89,6 +92,19 @@ def descriptions(node: Any, location: str = "") -> Iterator[tuple[str, str]]:
             yield from descriptions(value, f"{location}/{index}")
 
 
+def expected_problems(path: str, operation: dict[str, Any]) -> set[str]:
+    expected = set()
+    if VERSIONED_API_PATH.match(path):
+        expected.add("403")
+    locations = {parameter["in"] for parameter in operation.get("parameters", [])}
+    # A malformed path id returns 404, so only other input can return 422.
+    if "path" in locations:
+        expected.add("404")
+    if locations & {"query", "header"} or "requestBody" in operation:
+        expected.add("422")
+    return expected
+
+
 @pytest.mark.parametrize(("method", "path", "operation"), OPERATIONS)
 def test_operation_id_follows_the_vocabulary(
     method: str, path: str, operation: dict[str, Any]
@@ -105,3 +121,17 @@ def test_descriptions_are_written_for_clients() -> None:
         if DOCSTRING_SECTIONS.search(text)
     }
     assert with_sections == {}
+
+
+@pytest.mark.parametrize(("method", "path", "operation"), OPERATIONS)
+def test_operation_declares_its_responses(
+    method: str, path: str, operation: dict[str, Any]
+) -> None:
+    responses = operation["responses"]
+    for status in expected_problems(path, operation):
+        assert responses.get(status, {}).get("content") == PROBLEM_CONTENT, status
+    if method == "post" and len(segments(path)) == 1:
+        created = responses.get("201", {}).get("headers", {})
+        assert "Location" in created, "a create returns 201 with a Location header"
+    if method == "delete":
+        assert "204" in responses

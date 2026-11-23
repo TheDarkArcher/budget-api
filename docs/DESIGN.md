@@ -390,7 +390,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   - A repeat with the same key and the same request returns the original response again, without creating anything.
   - The same key with a different request returns 422.
   - Only successful creates are stored: a request that fails stores nothing, so it can be corrected and retried with the same key.
-- **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query, path or header parameter. When a status code has more than one meaning (409 and 422), `type` is one of the problem types below so clients can tell them apart; otherwise it is `about:blank`.
+- **Errors:** use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query or header parameter. When a status code has more than one meaning (409 and 422), `type` is one of the problem types below so clients can tell them apart; otherwise it is `about:blank`.
   - The exception is `GET /health/ready` (at the root, outside `/api/v1`): it returns the same health body for both 200 and 503, with any failing check marked, so monitors only read one shape.
 - **Problem types:**
 
