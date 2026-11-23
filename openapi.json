@@ -223,7 +223,7 @@
           "parameter": {
             "type": "string",
             "title": "Parameter",
-            "description": "The name of the query, path or header parameter, as sent, such as `pageSize`. Present when the problem is in a parameter."
+            "description": "The name of the query or header parameter, as sent, such as `pageSize`. Present when the problem is in a parameter."
           }
         },
         "type": "object",

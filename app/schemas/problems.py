@@ -19,7 +19,7 @@ class ProblemErrorEntry(ApiModel):
     )
     parameter: str | SkipJsonSchema[None] = Field(
         default=None,
-        description="The name of the query, path or header parameter, as sent,"
+        description="The name of the query or header parameter, as sent,"
         " such as `pageSize`. Present when the problem is in a parameter.",
     )
 

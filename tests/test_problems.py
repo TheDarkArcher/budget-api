@@ -97,6 +97,10 @@ def invalid_reference() -> None:
     )
 
 
+def get_thing(thing_id: UUID) -> dict[str, bool]:
+    return {"ok": True}
+
+
 def replace_thing(thing_id: UUID, body: ProbeBody) -> dict[str, bool]:
     return {"ok": True}
 
@@ -120,6 +124,7 @@ def probe_client(
     v1.router.add_api_route(
         "/test/invalid-reference", invalid_reference, methods=["POST"]
     )
+    v1.router.add_api_route("/test/things/{thing_id}", get_thing, methods=["GET"])
     v1.router.add_api_route("/test/things/{thing_id}", replace_thing, methods=["PUT"])
     v1.router.add_api_route("/test/domain-error", raise_domain_error, methods=["POST"])
     v1.router.add_api_route(
@@ -447,6 +452,18 @@ def test_declared_problem_response_is_documented_as_problem_json(
             }
         },
     }
+
+
+def test_only_operations_that_can_fail_validation_document_it(
+    probe_client: TestClient,
+) -> None:
+    # A malformed path id returns 404, so an operation whose only input is
+    # its path can't return 422.
+    thing = probe_client.get("/openapi.json").json()["paths"][
+        "/api/v1/test/things/{thing_id}"
+    ]
+    assert "422" not in thing["get"]["responses"]
+    assert "422" in thing["put"]["responses"]
 
 
 def test_validation_failure_is_documented_as_a_problem(

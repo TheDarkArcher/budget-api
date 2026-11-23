@@ -174,7 +174,8 @@ def document_problem_responses(document: dict[str, Any]) -> dict[str, Any]:
     Responses declared with ``documented_problem`` have their schema moved to
     the problem media type, and FastAPI's own validation error response is
     replaced by the validation problem, with the problem schemas added if no
-    operation has defined them.
+    operation has defined them. An operation whose only input is its path
+    loses that response instead, as a malformed path id returns 404.
 
     Args:
         document: The OpenAPI document FastAPI generated.
@@ -190,7 +191,8 @@ def document_problem_responses(document: dict[str, Any]) -> dict[str, Any]:
         for method, operation in path_item.items():
             if method not in HTTP_METHODS:
                 continue
-            for response in operation.get("responses", {}).values():
+            responses = operation.get("responses", {})
+            for status, response in list(responses.items()):
                 content = response.get("content", {})
                 if PROBLEM_MEDIA_TYPE in content:
                     if (schema := content.pop(JSON_MEDIA_TYPE, None)) is not None:
@@ -198,15 +200,33 @@ def document_problem_responses(document: dict[str, Any]) -> dict[str, Any]:
                 elif content.get(JSON_MEDIA_TYPE, {}).get("schema") == (
                     validation_schema
                 ):
-                    response["content"] = {
-                        PROBLEM_MEDIA_TYPE: {"schema": problem_schema}
-                    }
-                    replaced_validation = True
+                    if has_only_path_input(operation):
+                        del responses[status]
+                    else:
+                        response["content"] = {
+                            PROBLEM_MEDIA_TYPE: {"schema": problem_schema}
+                        }
+                        replaced_validation = True
     if replaced_validation:
         add_problem_schemas(schemas)
     for unused in ("HTTPValidationError", "ValidationError"):
         schemas.pop(unused, None)
     return document
+
+
+def has_only_path_input(operation: dict[str, Any]) -> bool:
+    """Tell whether an OpenAPI operation's only input is its path.
+
+    Args:
+        operation: The operation, as FastAPI generated it.
+
+    Returns:
+        True if every parameter is in the path and there is no request body.
+    """
+    parameters = operation.get("parameters", [])
+    return "requestBody" not in operation and all(
+        parameter["in"] == "path" for parameter in parameters
+    )
 
 
 def add_problem_schemas(schemas: dict[str, Any]) -> None:

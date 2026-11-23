@@ -1,6 +1,6 @@
 ---
 name: openapi-problem-documentation
-description: How error responses are documented as problem+json in OpenAPI (documented_problem, BudgetAPI.openapi transform) and what changes to it must keep
+description: How error responses are documented as problem+json in OpenAPI (documented_problem, BudgetAPI.openapi transform, no 422 on path-only operations) and what changes to it must keep
 metadata:
   type: project
 ---
@@ -13,3 +13,4 @@ metadata:
 - Every `$ref` resolves: the `Problem` component must exist wherever a `$ref` to it appears, so when no operation's `model: Problem` defines it, the transform adds it (`add_problem_schemas`), in the same shape FastAPI generates.
 - Members the API leaves out (`errors`, `pointer`, `parameter`) are documented as optional, never nullable; `type` is required.
 - 409 and 422 responses use `ProblemError` or a domain error, never `HTTPException`: the `HTTPException` handler sends `about:blank`, while the documented `type` promises a named type for 409 and 422.
+- A path-only operation (`has_only_path_input`: no `requestBody`, every parameter `in: path`) documents no 422, because a malformed path id returns 404. Flag a change that gives such an operation a 422, or removes the 422 from one with a body, query or header input. A declared problem+json 422, such as an idempotency mismatch, is never removed.
