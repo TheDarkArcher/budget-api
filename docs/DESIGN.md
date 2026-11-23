@@ -430,10 +430,20 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   | 422 | Validation failure, including unknown or archived references, a malformed or disallowed query parameter and an `Idempotency-Key` reused with a different request |
 
 ### 8.8 OpenAPI
-- FastAPI serves `/openapi.json` and interactive docs at `/docs`.
-- An exported **`openapi.json` is committed** to this repo; CI fails if it no longer matches the code.
-- Every operation has an explicit camelCase `operationId`, such as `getLiveness` or `listPayees`, so generated clients get readable method names.
-- Operation and field descriptions are written for clients, without docstring sections such as `Args:`.
+- **Serving:** FastAPI serves `/openapi.json` and interactive docs at `/docs`.
+- **Export:** an exported `openapi.json` is committed to this repo; CI fails if it no longer matches the code.
+- **Operation ids:** every operation has an explicit camelCase `operationId`, so generated clients get readable method names. An id is a verb and the resource it acts on or what it returns, with the verb set by the method and path as in the table below, where `{resource}` is one of the resources in [Lookup Resources](#81-lookup-resources) or [Transactions (API Design)](#82-transactions), `{id}` is one of its records' ids, and `{subresource}` is a collection belonging to that record. The resource is named in PascalCase from its path segment, so `/item-categories` gives `listItemCategories` and `createItemCategory`.
+- **Summaries:** every operation also has a short, sentence-case `summary` that reads as its `operationId` in words, with an article for a single record, such as "List payees", "Create a payee" and "Get the current user".
+- **Descriptions:** operation and field descriptions are written for clients, without docstring sections such as `Args:`.
+
+| Method and path | Operation id | Example |
+|---|---|---|
+| `GET /{resource}` | `list` plus the plural | `listPayees` |
+| `POST /{resource}` | `create` plus the singular | `createPayee` |
+| `GET`, `PUT` or `DELETE /{resource}/{id}` | `get`, `replace` or `delete` respectively, plus the singular | `getPayee`, `replacePayee`, `deletePayee` |
+| `POST /{resource}/{id}/archive` or `/unarchive` | `archive` or `unarchive` respectively, plus the singular | `archivePayee`, `unarchivePayee` |
+| `GET /{resource}/{id}/{subresource}` | `list` plus the parent's singular plus the sub-resource's plural | `listItemSizes` |
+| Any other `GET` path | `get` plus what it returns | `getCurrentUser`, `getLiveness`, `getReadiness`, `getTransactionSummary` |
 
 ---
 
