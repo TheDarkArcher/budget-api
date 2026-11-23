@@ -10,9 +10,9 @@
         "tags": [
           "health"
         ],
-        "summary": "Live",
-        "description": "Report whether the app process is up, without checking any subsystem.\n\nReturns:\n    An ``ok`` status, the app version and the build label, if known.",
-        "operationId": "live_health_live_get",
+        "summary": "Get liveness",
+        "description": "Report whether the app process is up. Doesn't check any subsystem; use `/health/ready` for that.",
+        "operationId": "getLiveness",
         "responses": {
           "200": {
             "description": "The app is running",
@@ -32,9 +32,9 @@
         "tags": [
           "health"
         ],
-        "summary": "Ready",
-        "description": "Report whether the app and each subsystem it depends on are ready.\n\nArgs:\n    checks: The health checks to run.\n    response: The outgoing response, used to set 503 when not ready.\n\nReturns:\n    The overall readiness and each check's result.",
-        "operationId": "ready_health_ready_get",
+        "summary": "Get readiness",
+        "description": "Report whether the app and each subsystem it depends on are ready, with each check's result.",
+        "operationId": "getReadiness",
         "responses": {
           "200": {
             "description": "All subsystems are healthy",
@@ -64,9 +64,9 @@
         "tags": [
           "users"
         ],
-        "summary": "Me",
-        "description": "Return the user the request acts as.\n\nArgs:\n    user: The current user.\n\nReturns:\n    The current user's id and name.",
-        "operationId": "me_api_v1_me_get",
+        "summary": "Get the current user",
+        "description": "Return the user the request acts as.",
+        "operationId": "getCurrentUser",
         "responses": {
           "200": {
             "description": "The current user",

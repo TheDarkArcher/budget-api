@@ -34,6 +34,10 @@ HealthChecksDep = Annotated[Mapping[str, HealthCheck], Depends(get_health_checks
 
 @router.get(
     "/live",
+    operation_id="getLiveness",
+    summary="Get liveness",
+    description="Report whether the app process is up. Doesn't check any"
+    " subsystem; use `/health/ready` for that.",
     response_model_exclude_none=True,
     response_description="The app is running",
 )
@@ -48,6 +52,10 @@ async def live() -> LivenessResponse:
 
 @router.get(
     "/ready",
+    operation_id="getReadiness",
+    summary="Get readiness",
+    description="Report whether the app and each subsystem it depends on are"
+    " ready, with each check's result.",
     response_model_exclude_none=True,
     response_description="All subsystems are healthy",
     responses={

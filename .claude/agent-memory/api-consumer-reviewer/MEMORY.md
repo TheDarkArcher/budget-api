@@ -1,3 +1,4 @@
 - [Transactions createdAt](accepted-transactions-createdat.md) — accepted trade-off: no createdAt on transactions; sort rule suffices
 - [Screens review decisions](accepted-screens-review-decisions.md) — settled 2026-11-17/18 decisions (counts deferred to M2, no cascade counts); don't re-raise
 - [Candidate issues](candidate-issues.md) — open candidate findings with review counts; drop when fixed or rejected
+- [Operation id decisions](accepted-operation-id-decisions.md) — 8.8 id table settled 2026-11-23; irregular plurals declined, verb rule deferred
