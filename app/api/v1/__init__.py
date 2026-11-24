@@ -6,7 +6,7 @@ its endpoint asks for the user.
 
 from fastapi import APIRouter
 
-from app.api.problems import documented_problem
+from app.api.openapi import documented_problem
 from app.api.v1 import users
 
 router = APIRouter(

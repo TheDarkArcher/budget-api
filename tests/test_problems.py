@@ -12,11 +12,11 @@ from fastapi import APIRouter, FastAPI, Header, Query
 from fastapi.testclient import TestClient
 from problems import assert_problem, without_error_details
 
+from app.api.openapi import documented_problem
 from app.api.problems import (
     INVALID_REFERENCE,
     NAME_CONFLICT,
     ProblemError,
-    documented_problem,
 )
 from app.core.errors import (
     ArchivedError,
