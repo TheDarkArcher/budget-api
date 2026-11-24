@@ -124,7 +124,7 @@ sequence = [
 
 [tool.poe.tasks.test]
 help = "Run the tests with coverage; extra arguments go to pytest"
-cmd = "pytest --cov"
+cmd = "pytest --cov=app"
 
 [tool.poe.tasks.migrate]
 help = "Run Alembic, by default `upgrade head`; e.g. `poe migrate downgrade -1`"
