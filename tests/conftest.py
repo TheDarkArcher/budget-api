@@ -12,12 +12,13 @@ from fakes import (
     FakeTransactionCategoryRepository,
     FakeUserRepository,
 )
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 from records import World, make_world
 from sqlalchemy import Connection, Engine
 from testcontainers.community.postgres import PostgresContainer
 
+from app.api import v1
 from app.core.config import Settings, get_settings
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.database.engine import get_engine, get_ping_engine
@@ -87,7 +88,15 @@ def alembic_config() -> Callable[[Connection], Config]:
 
 
 @pytest.fixture
-def app(connection: Connection) -> FastAPI:
+def probe_router(monkeypatch: pytest.MonkeyPatch) -> APIRouter:
+    # The real v1 router with a copy of its routes, which monkeypatch swaps
+    # back after the test, so probe routes added to it don't leak.
+    monkeypatch.setattr(v1.router, "routes", list(v1.router.routes))
+    return v1.router
+
+
+@pytest.fixture
+def make_app(connection: Connection) -> Callable[[], FastAPI]:
     # A savepoint per request, so the request's writes are kept or rolled
     # back as open_connection's transaction does.
     @contextmanager
@@ -95,7 +104,17 @@ def app(connection: Connection) -> FastAPI:
         with connection.begin_nested():
             yield connection
 
-    return create_app(open_connection=open_savepoint)
+    # Probe fixtures call this after adding their routes, as the app copies
+    # the router's routes when it's built.
+    def build() -> FastAPI:
+        return create_app(open_connection=open_savepoint)
+
+    return build
+
+
+@pytest.fixture
+def app(make_app: Callable[[], FastAPI]) -> FastAPI:
+    return make_app()
 
 
 @pytest.fixture

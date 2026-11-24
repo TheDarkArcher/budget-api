@@ -1,21 +1,20 @@
 """Tests for the current-user resolver in front of every versioned API request."""
 
-from collections.abc import Generator, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
 from uuid import UUID
 
 import pytest
+from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 from problems import assert_problem
 from sql import count
 from sqlalchemy import Connection
 
-from app.api import current_user, v1
+from app.api import current_user
 from app.api.dependencies import ConnectionDep, CurrentUserDep
 from app.core.config import get_settings
 from app.core.dummy_user import DUMMY_USER_ID, DUMMY_USER_NAME
 from app.core.errors import ArchivedError
-from app.main import create_app
 from app.repositories.users import SQLUserRepository, User, UserRepository
 from app.services.users import get_user
 
@@ -38,26 +37,19 @@ def write_then_refuse(connection: ConnectionDep) -> None:
 
 @pytest.fixture
 def probe_client(
-    connection: Connection, monkeypatch: pytest.MonkeyPatch
+    probe_router: APIRouter,
+    make_app: Callable[[], FastAPI],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
-    # Probe routes on the real v1 router, added to a copy of its routes that
-    # monkeypatch swaps back after the test.
-    monkeypatch.setattr(v1.router, "routes", list(v1.router.routes))
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", ORIGIN)
     get_settings.cache_clear()
-    v1.router.add_api_route("/test/open", open_endpoint)
-    v1.router.add_api_route("/test/whoami", whoami)
-    v1.router.add_api_route(
+    probe_router.add_api_route("/test/open", open_endpoint)
+    probe_router.add_api_route("/test/whoami", whoami)
+    probe_router.add_api_route(
         "/test/write-then-refuse", write_then_refuse, methods=["POST"]
     )
 
-    # A savepoint per request, as in conftest.py's app fixture.
-    @contextmanager
-    def open_savepoint() -> Generator[Connection]:
-        with connection.begin_nested():
-            yield connection
-
-    with TestClient(create_app(open_connection=open_savepoint)) as client:
+    with TestClient(make_app()) as client:
         yield client
     get_settings.cache_clear()
 
