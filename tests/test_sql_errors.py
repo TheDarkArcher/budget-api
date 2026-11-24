@@ -24,7 +24,7 @@ from app.core.errors import (
     NameConflictError,
     TypeChangeError,
 )
-from app.repositories.errors import translate_constraint_errors
+from app.repositories.sql_errors import translate_sql_constraint_errors
 
 DUPLICATE_NAMES = [
     pytest.param(
@@ -109,7 +109,7 @@ class Refusals:
 def translated(connection: Connection, sql: str, **params: object) -> DomainError:
     with (
         pytest.raises(DomainError) as caught,
-        translate_constraint_errors(connection),
+        translate_sql_constraint_errors(connection),
     ):
         run(connection, sql, **params)
     return caught.value
@@ -181,7 +181,7 @@ def test_unmapped_constraint_is_raised_unchanged(
 ) -> None:
     with (
         pytest.raises(IntegrityError),
-        translate_constraint_errors(connection),
+        translate_sql_constraint_errors(connection),
     ):
         run(
             connection,

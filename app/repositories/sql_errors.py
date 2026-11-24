@@ -20,7 +20,7 @@ from app.core.errors import (
 # The domain error for each constraint a request can break. Others, such as an
 # item size's value or unit changing, are bugs no request can cause, so they
 # stay unmapped and surface as an unexpected error.
-CONSTRAINT_ERRORS: Mapping[str, Callable[[], DomainError]] = {
+SQL_CONSTRAINT_ERRORS: Mapping[str, Callable[[], DomainError]] = {
     "transaction_categories_user_id_name_key": NameConflictError,
     "item_categories_user_id_name_key": NameConflictError,
     "payees_user_id_name_key": NameConflictError,
@@ -42,7 +42,7 @@ CONSTRAINT_ERRORS: Mapping[str, Callable[[], DomainError]] = {
 
 
 @contextmanager
-def translate_constraint_errors(connection: Connection) -> Generator[None]:
+def translate_sql_constraint_errors(connection: Connection) -> Generator[None]:
     """Run writes in a savepoint, raising a refused constraint as a domain error.
 
     The savepoint is rolled back on failure, so the transaction stays usable,
@@ -67,7 +67,7 @@ def translate_constraint_errors(connection: Connection) -> Generator[None]:
             if isinstance(exc.orig, psycopg.Error)
             else None
         )
-        domain_error = CONSTRAINT_ERRORS.get(constraint or "")
+        domain_error = SQL_CONSTRAINT_ERRORS.get(constraint or "")
         if domain_error is None:
             raise
         raise domain_error() from exc

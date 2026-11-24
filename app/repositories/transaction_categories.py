@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import Connection, text
 
-from app.repositories.errors import translate_constraint_errors
+from app.repositories.sql_errors import translate_sql_constraint_errors
 
 type CategoryType = Literal["income", "expense"]
 
@@ -70,7 +70,7 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
         Raises:
             NameConflictError: If the user has another category with the name.
         """
-        with translate_constraint_errors(self._connection):
+        with translate_sql_constraint_errors(self._connection):
             category_id: UUID = self._connection.execute(
                 text(
                     "INSERT INTO transaction_categories (user_id, name, type)"
@@ -92,7 +92,7 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
         Raises:
             ArchivedError: If either category is archived.
         """
-        with translate_constraint_errors(self._connection):
+        with translate_sql_constraint_errors(self._connection):
             self._connection.execute(
                 text(
                     "INSERT INTO transaction_category_item_categories"
