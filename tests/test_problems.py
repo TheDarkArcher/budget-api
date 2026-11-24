@@ -1,20 +1,17 @@
 """Tests for the problem+json error responses of ``/api/v1``."""
 
 import logging
-from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from functools import partial
 from typing import Annotated, Any
 from uuid import UUID
 
 import pytest
-from fastapi import Header, Query
+from fastapi import APIRouter, FastAPI, Header, Query
 from fastapi.testclient import TestClient
 from problems import assert_problem, without_error_details
-from sqlalchemy import Connection
 
-from app.api import v1
 from app.api.problems import (
     INVALID_REFERENCE,
     NAME_CONFLICT,
@@ -28,7 +25,6 @@ from app.core.errors import (
     InUseError,
     TypeChangeError,
 )
-from app.main import create_app
 from app.schemas.base import ApiModel
 from app.schemas.problems import ProblemErrorEntry
 
@@ -111,36 +107,31 @@ def raise_domain_error(kind: str) -> None:
 
 @pytest.fixture
 def probe_client(
-    connection: Connection, monkeypatch: pytest.MonkeyPatch
+    probe_router: APIRouter, make_app: Callable[[], FastAPI]
 ) -> Iterator[TestClient]:
-    # Probe routes on the real v1 router, added to a copy of its routes that
-    # monkeypatch swaps back after the test.
-    monkeypatch.setattr(v1.router, "routes", list(v1.router.routes))
-    v1.router.add_api_route("/test/read-only", read_only, methods=["GET"])
-    v1.router.add_api_route("/test/body", accept_body, methods=["POST"])
-    v1.router.add_api_route("/test/parameters", accept_parameters, methods=["GET"])
-    v1.router.add_api_route("/test/fail", fail, methods=["GET"])
-    v1.router.add_api_route("/test/conflict", conflict, methods=["POST"])
-    v1.router.add_api_route(
+    probe_router.add_api_route("/test/read-only", read_only, methods=["GET"])
+    probe_router.add_api_route("/test/body", accept_body, methods=["POST"])
+    probe_router.add_api_route("/test/parameters", accept_parameters, methods=["GET"])
+    probe_router.add_api_route("/test/fail", fail, methods=["GET"])
+    probe_router.add_api_route("/test/conflict", conflict, methods=["POST"])
+    probe_router.add_api_route(
         "/test/invalid-reference", invalid_reference, methods=["POST"]
     )
-    v1.router.add_api_route("/test/things/{thing_id}", get_thing, methods=["GET"])
-    v1.router.add_api_route("/test/things/{thing_id}", replace_thing, methods=["PUT"])
-    v1.router.add_api_route("/test/domain-error", raise_domain_error, methods=["POST"])
-    v1.router.add_api_route(
+    probe_router.add_api_route("/test/things/{thing_id}", get_thing, methods=["GET"])
+    probe_router.add_api_route(
+        "/test/things/{thing_id}", replace_thing, methods=["PUT"]
+    )
+    probe_router.add_api_route(
+        "/test/domain-error", raise_domain_error, methods=["POST"]
+    )
+    probe_router.add_api_route(
         "/test/documented-conflict",
         conflict,
         methods=["POST"],
         responses={409: documented_problem("The name is already in use")},
     )
 
-    # A savepoint per request, as in conftest.py's app fixture.
-    @contextmanager
-    def open_savepoint() -> Generator[Connection]:
-        with connection.begin_nested():
-            yield connection
-
-    with TestClient(create_app(open_connection=open_savepoint)) as client:
+    with TestClient(make_app()) as client:
         yield client
 
 
