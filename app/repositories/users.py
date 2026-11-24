@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, tstring
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ class SQLUserRepository(UserRepository):
             The user, or ``None`` if no user has that id.
         """
         row = self._connection.execute(
-            text("SELECT id, name FROM users WHERE id = :id"), {"id": user_id}
+            tstring(t"SELECT id, name FROM users WHERE id = {user_id}")
         ).first()
         return None if row is None else User(id=row.id, name=row.name)
 
@@ -80,10 +80,11 @@ class SQLUserRepository(UserRepository):
             already existed.
         """
         inserted = self._connection.execute(
-            text(
-                "INSERT INTO users (id, name) VALUES (:id, :name)"
-                " ON CONFLICT (id) DO NOTHING RETURNING id"
-            ),
-            {"id": user_id, "name": name},
+            tstring(t"""
+                INSERT INTO users (id, name)
+                VALUES ({user_id}, {name})
+                ON CONFLICT (id) DO NOTHING
+                RETURNING id
+            """)
         ).first()
         return inserted is not None

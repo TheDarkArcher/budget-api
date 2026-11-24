@@ -1,14 +1,21 @@
 """SQL for the ``transaction_categories`` table and its item category links."""
 
 from abc import ABC, abstractmethod
-from typing import Literal
+from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, tstring
 
 from app.repositories.sql_errors import translate_sql_constraint_errors
 
-type CategoryType = Literal["income", "expense"]
+
+# An enum rather than plain strings, as SQLAlchemy casts a string in a t-string
+# to VARCHAR, which PostgreSQL doesn't accept as a category_type.
+class CategoryType(StrEnum):
+    """Whether a transaction category is for income or expenses."""
+
+    INCOME = "income"
+    EXPENSE = "expense"
 
 
 class TransactionCategoryRepository(ABC):
@@ -72,11 +79,11 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
         """
         with translate_sql_constraint_errors(self._connection):
             category_id: UUID = self._connection.execute(
-                text(
-                    "INSERT INTO transaction_categories (user_id, name, type)"
-                    " VALUES (:user_id, :name, :type) RETURNING id"
-                ),
-                {"user_id": user_id, "name": name, "type": category_type},
+                tstring(t"""
+                    INSERT INTO transaction_categories (user_id, name, type)
+                    VALUES ({user_id}, {name}, {category_type})
+                    RETURNING id
+                """)
             ).scalar_one()
         return category_id
 
@@ -94,13 +101,9 @@ class SQLTransactionCategoryRepository(TransactionCategoryRepository):
         """
         with translate_sql_constraint_errors(self._connection):
             self._connection.execute(
-                text(
-                    "INSERT INTO transaction_category_item_categories"
-                    " (transaction_category_id, item_category_id)"
-                    " VALUES (:transaction_category_id, :item_category_id)"
-                ),
-                {
-                    "transaction_category_id": transaction_category_id,
-                    "item_category_id": item_category_id,
-                },
+                tstring(t"""
+                    INSERT INTO transaction_category_item_categories
+                        (transaction_category_id, item_category_id)
+                    VALUES ({transaction_category_id}, {item_category_id})
+                """)
             )

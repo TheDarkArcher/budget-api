@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, tstring
 
 from app.repositories.sql_errors import translate_sql_constraint_errors
 
@@ -53,10 +53,10 @@ class SQLItemCategoryRepository(ItemCategoryRepository):
         """
         with translate_sql_constraint_errors(self._connection):
             category_id: UUID = self._connection.execute(
-                text(
-                    "INSERT INTO item_categories (user_id, name)"
-                    " VALUES (:user_id, :name) RETURNING id"
-                ),
-                {"user_id": user_id, "name": name},
+                tstring(t"""
+                    INSERT INTO item_categories (user_id, name)
+                    VALUES ({user_id}, {name})
+                    RETURNING id
+                """)
             ).scalar_one()
         return category_id
