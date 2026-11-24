@@ -4,7 +4,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from functools import lru_cache
 
-from sqlalchemy import URL, Connection, Engine, create_engine, make_url, text
+from sqlalchemy import URL, Connection, Engine, create_engine, make_url, text, tstring
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
@@ -98,8 +98,8 @@ def ping() -> None:
             or doesn't answer within the timeout.
     """
     with get_ping_engine().connect() as connection:
+        timeout_ms = str(PING_TIMEOUT_SECONDS * 1000)
         connection.execute(
-            text("SELECT set_config('statement_timeout', :ms, true)"),
-            {"ms": str(PING_TIMEOUT_SECONDS * 1000)},
+            tstring(t"SELECT set_config('statement_timeout', {timeout_ms}, true)")
         )
         connection.execute(text("SELECT 1"))

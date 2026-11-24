@@ -10,10 +10,10 @@ from app.repositories.transaction_categories import (
 from app.repositories.users import User, UserRepository
 
 DEFAULT_TRANSACTION_CATEGORIES: dict[str, CategoryType] = {
-    "Salary": "income",
-    "Groceries": "expense",
-    "Rent": "expense",
-    "Bills": "expense",
+    "Salary": CategoryType.INCOME,
+    "Groceries": CategoryType.EXPENSE,
+    "Rent": CategoryType.EXPENSE,
+    "Bills": CategoryType.EXPENSE,
 }
 
 DEFAULT_ITEM_CATEGORIES = (

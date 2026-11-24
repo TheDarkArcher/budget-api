@@ -47,6 +47,7 @@
 ## Database
 
 - Always use bound parameters. Never build SQL with f-strings or string formatting.
+- SQLAlchemy's `tstring()` is allowed, because it binds every value interpolated into it as a parameter, except SQL elements. Only another `tstring()` or a `text()` of fixed SQL may be interpolated as SQL.
 - Never edit a migration that has already been committed; add a new one instead.
 - Every migration must have a working `downgrade()`.
 
