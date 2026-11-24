@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.api import health, v1
 from app.api.current_user import ConnectionOpener, CurrentUserMiddleware
-from app.api.problems import add_problem_handlers, document_problem_responses
+from app.api.openapi import document_problem_responses
+from app.api.problems import add_problem_handlers
 from app.core.config import get_settings
 from app.database import engine
 
