@@ -13,6 +13,7 @@ from pydantic.alias_generators import to_camel
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 
+from app.api.routing import RepeatedParameter
 from app.core.errors import (
     ArchivedError,
     Blocker,
@@ -91,6 +92,7 @@ IN_USE_PROBLEMS: Mapping[Blocker, tuple[ProblemType, str]] = {
     ),
 }
 VALIDATION_DETAIL = "The request isn't valid; see errors for each problem."
+REPEATED_PARAMETER_DETAIL = "Send this parameter only once."
 
 
 # ====================================
@@ -183,7 +185,9 @@ def error_entry(error: Mapping[str, Any]) -> ProblemErrorEntry:
     """
     source, *location = error["loc"]
     if source != "body":
-        return ProblemErrorEntry(detail=error["msg"], parameter=str(location[0]))
+        repeated = isinstance(error["input"], RepeatedParameter)
+        detail = REPEATED_PARAMETER_DETAIL if repeated else error["msg"]
+        return ProblemErrorEntry(detail=detail, parameter=str(location[0]))
     # A body that isn't valid JSON has no fields, so the error is the whole body.
     if error["type"] == "json_invalid":
         location = []

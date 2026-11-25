@@ -3,9 +3,10 @@
 from fastapi import APIRouter
 
 from app.api.dependencies import CurrentUserDep
+from app.api.routing import SingleValueRoute
 from app.schemas.users import UserResponse
 
-router = APIRouter(tags=["users"])
+router = APIRouter(tags=["users"], route_class=SingleValueRoute)
 
 
 @router.get(

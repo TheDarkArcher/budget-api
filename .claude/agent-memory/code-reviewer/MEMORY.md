@@ -3,3 +3,5 @@
 - [Constraint error mapping](project_constraint_error_mapping.md) — constraint name to domain error to problem type; verified names, accepted gaps
 - [OpenAPI problem documentation](project_openapi_problem_documentation.md) — idempotent, refs resolve, optional not nullable, no path-only 422
 - [OpenAPI conventions test](project_openapi_conventions_test.md) — routes set operation_id, summary, client description; test derives responses
+- [Single-value route](project_single_value_route.md) — repeated query params; every v1 router needs route_class=SingleValueRoute
+- [SQL list helpers](project_sql_list_helpers.md) — paging, searching and sorting in sql_lists.py; what a list's query and criteria must provide
