@@ -94,7 +94,7 @@ def test_endpoints_that_dont_ask_for_the_user_still_succeed(
         pytest.param("GET", "/api/v2/test/open", id="later-version"),
     ],
 )
-def test_requests_are_forbidden_without_the_dummy_user(
+def test_requests_return_forbidden_problem_without_the_dummy_user(
     probe_client: TestClient, caplog: pytest.LogCaptureFixture, method: str, path: str
 ) -> None:
     response = probe_client.request(method, path)

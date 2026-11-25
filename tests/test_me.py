@@ -30,7 +30,7 @@ def test_returns_the_dummy_user(client: TestClient) -> None:
     assert response.json() == {"id": str(DUMMY_USER_ID), "name": DUMMY_USER_NAME}
 
 
-def test_is_forbidden_without_the_dummy_user(client: TestClient) -> None:
+def test_returns_forbidden_problem_without_the_dummy_user(client: TestClient) -> None:
     response = client.get(PATH)
     problem_body = assert_problem(response, 403)
     assert problem_body == {

@@ -272,7 +272,7 @@ def test_named_problem_carries_its_errors_entries(probe_client: TestClient) -> N
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_malformed_path_id_is_not_found(probe_client: TestClient) -> None:
+def test_malformed_path_id_returns_not_found_problem(probe_client: TestClient) -> None:
     response = probe_client.put(
         "/api/v1/test/things/not-an-id",
         json={"pageSize": 1, "sizes": []},
@@ -287,7 +287,7 @@ def test_malformed_path_id_is_not_found(probe_client: TestClient) -> None:
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_malformed_path_id_is_not_found_ahead_of_an_invalid_body(
+def test_malformed_path_id_returns_not_found_problem_even_if_the_body_is_invalid(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.put("/api/v1/test/things/not-an-id", json={})
@@ -341,7 +341,7 @@ def test_well_formed_path_id_still_gets_body_validation(
         ),
     ],
 )
-def test_missing_current_user_is_forbidden_ahead_of_validation(
+def test_missing_current_user_returns_forbidden_problem_even_if_the_request_is_invalid(
     probe_client: TestClient,
     method: str,
     path: str,
