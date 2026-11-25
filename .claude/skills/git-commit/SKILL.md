@@ -9,7 +9,7 @@ The rules are in the Git section of `AGENTS.md` and the "Git workflow" section o
 
 ## 1. Choose the branch
 - Run `git status -sb`. Never commit on a branch AGENTS.md rules out; a hook refuses it, and it must not be worked around.
-- Use the current or an existing development branch when the change is related to it. Otherwise propose a new branch, named in snake_case like the existing ones (e.g. `fix_script_import_sorting`), and create it from an up-to-date `main` with `git fetch` and then `git switch -c <name> --no-track origin/main`.
+- Use the current or an existing development branch when the change is related to it. Otherwise propose a new branch, named as AGENTS.md says, and create it with `git fetch` and then `git switch -c <name> --no-track origin/main`.
 - When the change depends on a branch that isn't merged yet, create the new branch from that branch instead and tell the maintainer it is stacked, so the pull requests are merged in order. Rebasing it once that branch merges rewrites its commits, so it needs the approval AGENTS.md requires.
 - Unrelated changes go on separate branches. If the working tree holds changes for more than one issue, say which files belong where.
 
