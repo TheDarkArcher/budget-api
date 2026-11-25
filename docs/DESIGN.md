@@ -286,7 +286,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 
 - **Problems column:** lists the problem types specific to each endpoint. It leaves out `/problems/validation`, which almost any request can raise, and `/problems/invalid-reference`, which any write with ids in its body can raise; both are in [Errors](#89-errors).
 - **List parameters:**
-  - `?q=` searches names, matching any name that contains it, ignoring case. It is trimmed, ignored when blank, and at most 100 characters after trimming.
+  - `?q=` searches names, matching any name that contains it, ignoring case. It is trimmed, ignored when blank, at most 100 characters after trimming, and can't contain a NUL character.
   - `?archived=false|true|all`, default `false`.
   - `?sort=` and `?order=asc|desc`. Lists are ordered case-insensitively by name, ascending, by default, with ties broken by `id` in the same order.
 - **Archive time:** every record except a tag has an `archivedAt` field, `null` while the record is active, holding its archive time as [Archiving and Deleting](#46-archiving-and-deleting) describes.
