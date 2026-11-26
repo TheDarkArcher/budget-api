@@ -438,7 +438,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   - On any list, an unknown, another user's or archived id in a filter only narrows the result.
   - A `from` date after `to` returns an empty list.
 - **Dates:** ISO-8601 (`2026-10-23`).
-- **Names:** trimmed of surrounding whitespace and 1–100 characters long.
+- **Names:** trimmed of surrounding whitespace, 1–100 characters long, and can't contain a NUL character.
 - **Notes:** transaction and line notes are at most 1000 characters long.
 - **Paging:**
   - Paged endpoints accept `page` (default 1, at least 1) and `pageSize` (default 25, from 1 to 200).

@@ -5,29 +5,10 @@ from enum import StrEnum
 from typing import Annotated, Self, cast
 
 from pydantic import AfterValidator, ConfigDict, Field, StringConstraints
-from pydantic_core import PydanticCustomError
 
 from app.core.list_options import ArchivedFilter, NameSort, SortOrder
 from app.schemas.base import ApiModel
-
-
-def reject_nul(value: str) -> str:
-    """Check a string holds no NUL character, which PostgreSQL can't store.
-
-    Args:
-        value: The string sent in the request.
-
-    Returns:
-        The string, unchanged.
-
-    Raises:
-        PydanticCustomError: If the string holds a NUL character.
-    """
-    if "\0" in value:
-        raise PydanticCustomError(
-            "nul_character", "String should not contain a NUL character"
-        )
-    return value
+from app.schemas.fields import reject_nul
 
 
 class PageParameters(ApiModel):
