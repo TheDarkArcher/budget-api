@@ -314,7 +314,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
   - `?itemCategoryId=` and `?tagId=` are repeatable. A repeated filter matches an item that has any one of the values given, and an item must match every filter given.
   - `?sort=` accepts `name` or `itemCategory`, which orders case-insensitively by item category name, then item name. Every other lookup accepts only `name`.
 - **Item sizes:**
-  - Managed through `sizes` on `POST /items` and `PUT /items/{id}`, following the size rules in [Archiving and Deleting](#46-archiving-and-deleting).
+  - Managed through `sizes` on `POST /items` and `PUT /items/{itemId}`, following the size rules in [Archiving and Deleting](#46-archiving-and-deleting).
   - A size is identified by its value and unit, with values compared as numbers: `"500"` and `"500.0"` are the same size.
   - A size's `id` and `archivedAt` in a request body are ignored.
   - `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`. It isn't paged and takes `?archived=false|true|all`, default `false`.
@@ -333,9 +333,9 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 | GET | `/transactions` | Paged list | |
 | POST | `/transactions` | Create the transaction and its lines in one database transaction | `/problems/item-category-not-linked`, `/problems/idempotency-key-mismatch` |
 | GET | `/transactions/summary` | Totals for the transactions the filters match | |
-| GET | `/transactions/{id}` | The full transaction, including lines | |
-| PUT | `/transactions/{id}` | Replace the transaction and its lines | `/problems/item-category-not-linked` |
-| DELETE | `/transactions/{id}` | Delete the transaction and its lines | |
+| GET | `/transactions/{transactionId}` | The full transaction, including lines | |
+| PUT | `/transactions/{transactionId}` | Replace the transaction and its lines | `/problems/item-category-not-linked` |
+| DELETE | `/transactions/{transactionId}` | Delete the transaction and its lines | |
 
 - **Problems column:** lists the problem types specific to each endpoint, as in [Lookup Resources](#81-lookup-resources).
 - **Filters:** the list and the summary take `from` and `to` (inclusive, on `occurredOn`), `transactionCategoryId` and `type`.
@@ -344,7 +344,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 - **Lines:**
   - Each line has an `id`, which stays the same across edits as [Line Items](#42-line-items) describes.
   - A PUT matches lines by `id`: a line with an `id` is updated, one without is added, and a saved line left out is deleted.
-  - `GET /transactions/{id}` orders lines by `?lineSort=itemCategory|item`, default `itemCategory`. POST and PUT return lines in the default order.
+  - `GET /transactions/{transactionId}` orders lines by `?lineSort=itemCategory|item`, default `itemCategory`. POST and PUT return lines in the default order.
   - An `errors` entry points to a line by its position in the request body, such as `/lines/1/itemSizeId` or `/lines/1/id`.
   - A `/problems/item-category-not-linked` response has one `errors` entry per offending line, naming both categories.
 - **Rules:**
@@ -385,7 +385,7 @@ POST /api/v1/transactions
 }
 ```
 
-The 201 response holds the full transaction, as `GET /transactions/{id}` returns it:
+The 201 response holds the full transaction, as `GET /transactions/{transactionId}` returns it:
 
 ```json
 {
@@ -423,6 +423,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 
 ### 8.7 Conventions
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case.
+- **Path parameters:** camelCase, named as the singular of the resource whose record they identify plus `Id`, such as `payeeId` in `/payees/{payeeId}` and `itemCategoryId` in `/item-categories/{itemCategoryId}`.
 - **Decimal numbers:**
   - Sent as JSON strings in requests and responses.
   - A request's string is trimmed of surrounding whitespace.
@@ -461,7 +462,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 | Code | Used for |
 |---|---|
 | 200 | Successful read, update, archive or unarchive |
-| 201 | Created, with a `Location` header holding the new record's path, such as `/api/v1/payees/{id}` |
+| 201 | Created, with a `Location` header holding the new record's path, such as `/api/v1/payees/{payeeId}` |
 | 204 | Successful delete |
 | 403 | No current user |
 | 404 | Not found, **including another user's records** (never reveals they exist), or a malformed id in the path |
