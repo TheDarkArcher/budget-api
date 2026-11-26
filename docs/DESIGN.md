@@ -563,7 +563,8 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   - MAJOR for changes that break existing API clients.
   - MINOR for backwards-compatible features.
   - PATCH for backwards-compatible fixes.
-- **Before 1.0:** `0.x` versions are pre-release, and the API is not considered stable until `1.0.0`; any `0.x` release may break it.
+- **Before 1.0:**
+  - `0.x` versions are pre-release, and the API is not considered stable until `1.0.0`; any `0.x` release may break it.
   - Each finished roadmap milestone is a minor release (Milestone 1 → `0.1.0`, Milestone 2 → `0.2.0`, …), and fixes between milestones are patch releases (e.g. `0.2.1`).
   - `1.0.0` is the Version 1 release, made up of the roadmap milestones. It is released once those milestones are complete and the API is declared stable.
 - **API URL version:** the `/api/vN` prefix matches the release's MAJOR version, so it changes only with a major release. Releases before `1.0.0` use `/api/v1`.
