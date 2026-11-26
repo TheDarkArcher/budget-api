@@ -32,6 +32,7 @@ DOCSTRING_SECTIONS = re.compile(
 )
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 VERSIONED_API_PATH = re.compile(r"^/api/v\d+(/|$)")
+CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
 PROBLEM_CONTENT = {
     "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
 }
@@ -135,3 +136,15 @@ def test_operation_declares_its_responses(
         assert "Location" in created, "a create returns 201 with a Location header"
     if method == "delete":
         assert "204" in responses
+
+
+@pytest.mark.parametrize(("method", "path", "operation"), OPERATIONS)
+def test_path_parameters_are_camel_case(
+    method: str, path: str, operation: dict[str, Any]
+) -> None:
+    names = [
+        parameter["name"]
+        for parameter in operation.get("parameters", [])
+        if parameter["in"] == "path"
+    ]
+    assert [name for name in names if not CAMEL_CASE.match(name)] == []
