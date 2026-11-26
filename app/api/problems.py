@@ -19,6 +19,7 @@ from app.core.errors import (
     Blocker,
     DomainError,
     InUseError,
+    NotFoundError,
     TypeChangeError,
 )
 from app.schemas.base import ApiModel
@@ -37,13 +38,14 @@ ABOUT_BLANK = "about:blank"
 
 @dataclass(frozen=True)
 class ProblemType:
-    """A named problem type, used where a status has more than one meaning."""
+    """A problem type: named where a status has several meanings, else about:blank."""
 
     uri: str
     status: HTTPStatus
     title: str
 
 
+NOT_FOUND = ProblemType(ABOUT_BLANK, HTTPStatus.NOT_FOUND, HTTPStatus.NOT_FOUND.phrase)
 NAME_CONFLICT = ProblemType(
     "/problems/name-conflict", HTTPStatus.CONFLICT, "Name already in use"
 )
@@ -101,7 +103,7 @@ REPEATED_PARAMETER_DETAIL = "Send this parameter only once."
 
 
 class ProblemError(Exception):
-    """An error sent to the client as a problem of a named type."""
+    """An error sent to the client as a problem of a given type."""
 
     def __init__(
         self,
@@ -114,7 +116,7 @@ class ProblemError(Exception):
         """Describe the problem.
 
         Args:
-            problem_type: The named type of the problem.
+            problem_type: The type of the problem.
             detail: An explanation of this occurrence of the problem.
             errors: The field-level problems, if any.
             **extensions: Extension members, such as ``existing``, named in
@@ -209,6 +211,8 @@ def domain_problem(error: DomainError) -> ProblemError:
             reported as an unexpected error.
     """
     match error:
+        case NotFoundError():
+            return ProblemError(NOT_FOUND, NOT_FOUND.title)
         case InUseError(blocked_by=blocker):
             return ProblemError(*IN_USE_PROBLEMS[blocker])
         case ArchivedError():
@@ -262,7 +266,7 @@ def add_problem_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ProblemError)
     async def handle_problem_error(request: Request, exc: ProblemError) -> Response:
-        """Send a problem of a named type.
+        """Send a problem of a given type.
 
         Args:
             request: The request that failed.
@@ -310,14 +314,9 @@ def add_problem_handlers(app: FastAPI) -> None:
         """
         errors = exc.errors()
         if any(error["loc"][0] == "path" for error in errors):
-            not_found = HTTPStatus.NOT_FOUND
-            problem = Problem(
-                type=ABOUT_BLANK,
-                title=not_found.phrase,
-                status=not_found,
-                detail=not_found.phrase,
+            return await handle_problem_error(
+                request, ProblemError(NOT_FOUND, NOT_FOUND.title)
             )
-            return problem_response(problem)
         problem = Problem(
             type=VALIDATION.uri,
             title=VALIDATION.title,

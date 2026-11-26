@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from fakes import (
     FakeItemCategoryRepository,
+    FakePayeeRepository,
     FakeTransactionCategoryRepository,
     FakeUserRepository,
 )
@@ -136,6 +137,11 @@ def alice(connection: Connection) -> World:
 @pytest.fixture
 def fake_item_category_repo() -> FakeItemCategoryRepository:
     return FakeItemCategoryRepository()
+
+
+@pytest.fixture
+def fake_payee_repo() -> FakePayeeRepository:
+    return FakePayeeRepository()
 
 
 @pytest.fixture

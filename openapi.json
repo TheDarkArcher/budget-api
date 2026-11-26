@@ -59,6 +59,134 @@
         }
       }
     },
+    "/api/v1/payees": {
+      "post": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Create a payee",
+        "description": "Create an active payee for the current user.",
+        "operationId": "createPayee",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "title": "Idempotency-Key"
+            },
+            "description": "Makes the request safe to repeat: a repeat with the same key and request returns the original response instead of creating another record, and the same key with a different request returns a 422 `/problems/idempotency-key-mismatch`. A repeat sent while the first request is still running waits for it. Choose a unique key, such as a UUID, for each record to create. A key lasts 24 hours, and only successful creates are stored, so a failed request can be sent again with the same key. The key is the header's text as sent, including any quotes, and the header may be sent only once."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayeeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new payee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeResponse"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "The new payee's path.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payees/{payeeId}": {
+      "get": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Get a payee",
+        "description": "Return one of the current user's payees, archived or not.",
+        "operationId": "getPayee",
+        "parameters": [
+          {
+            "name": "payeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Payeeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current user has no payee with this id, or the id is malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me": {
       "get": {
         "tags": [
@@ -166,6 +294,59 @@
         ],
         "title": "LivenessResponse",
         "description": "Whether the app process is up and serving requests."
+      },
+      "PayeeRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "The payee's name. Surrounding whitespace is trimmed, and it must then be 1 to 100 characters long, with no NUL character."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "PayeeRequest",
+        "description": "A payee, as a request to create or replace one sends it."
+      },
+      "PayeeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "The payee's id."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The payee's name."
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedat",
+            "description": "When the payee was archived, or null while it's active."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "archivedAt"
+        ],
+        "title": "PayeeResponse",
+        "description": "A payee, as the API returns it."
       },
       "Problem": {
         "properties": {

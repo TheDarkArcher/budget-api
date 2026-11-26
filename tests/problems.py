@@ -5,6 +5,13 @@ from typing import Any
 from httpx2 import Response
 
 PROBLEM_JSON = "application/problem+json"
+# The body of every 404, whether the path is unknown or names no record.
+NOT_FOUND_PROBLEM = {
+    "type": "about:blank",
+    "title": "Not Found",
+    "status": 404,
+    "detail": "Not Found",
+}
 
 
 def assert_problem(response: Response, status: int) -> dict[str, Any]:

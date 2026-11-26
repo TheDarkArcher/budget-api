@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 from app.repositories.item_categories import ItemCategoryRepository
+from app.repositories.payees import Payee, PayeeRepository
 from app.repositories.transaction_categories import (
     CategoryType,
     TransactionCategoryRepository,
@@ -20,6 +21,22 @@ class FakeItemCategoryRepository(ItemCategoryRepository):
         category_id = uuid4()
         self.item_categories[category_id] = (user_id, name)
         return category_id
+
+
+class FakePayeeRepository(PayeeRepository):
+    """Keeps payees in memory, by id, with the id of the user who owns each."""
+
+    def __init__(self) -> None:
+        self.payees: dict[UUID, tuple[UUID, Payee]] = {}
+
+    def create(self, user_id: UUID, name: str) -> Payee:
+        payee = Payee(id=uuid4(), name=name, archived_at=None)
+        self.payees[payee.id] = (user_id, payee)
+        return payee
+
+    def get(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        owner, payee = self.payees.get(payee_id, (None, None))
+        return payee if owner == user_id else None
 
 
 class FakeTransactionCategoryRepository(TransactionCategoryRepository):
