@@ -7,6 +7,10 @@ class DomainError(Exception):
     """A request broke a domain rule, so it can't be carried out."""
 
 
+class NotFoundError(DomainError):
+    """The user has no record with the id a request named."""
+
+
 class NameConflictError(DomainError):
     """A name is already used by another of the user's records, archived or not."""
 

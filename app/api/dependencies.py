@@ -9,6 +9,7 @@ from sqlalchemy import Connection
 from app.api.idempotency import IdempotencyKeyHeader, IdempotentCreate
 from app.database.engine import ConnectionOpener
 from app.repositories.idempotency_keys import SQLIdempotencyKeyRepository
+from app.repositories.payees import PayeeRepository, SQLPayeeRepository
 from app.repositories.users import SQLUserRepository, User, UserRepository
 
 
@@ -46,6 +47,21 @@ def get_user_repository(connection: ConnectionDep) -> UserRepository:
 
 
 UserRepositoryDep = Annotated[UserRepository, Depends(get_user_repository)]
+
+
+def get_payee_repository(connection: ConnectionDep) -> PayeeRepository:
+    """Provide the payee repository for one request.
+
+    Args:
+        connection: The request's database connection.
+
+    Returns:
+        A payee repository on that connection.
+    """
+    return SQLPayeeRepository(connection)
+
+
+PayeeRepositoryDep = Annotated[PayeeRepository, Depends(get_payee_repository)]
 
 
 def get_current_user(request: Request) -> User:
