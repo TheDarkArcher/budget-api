@@ -26,7 +26,7 @@ The rules are in the Git section of `AGENTS.md` and the "Git workflow" section o
 Follow the subject and body rules in AGENTS.md. Structure the body as:
 1. A paragraph on what the commit does overall and why: how things were before and what was wrong.
 2. A paragraph for each changed area or set of files that summarises what changed and why in one or two sentences. Open it with an imperative verb and the thing changed, such as "Update CLAUDE.md to …" or "Add a new agent to …", and give the reason in the same paragraph, usually with "so" or "to". Don't start a paragraph with a label such as "AGENTS.md:", and don't walk through individual edits; the diff shows those.
-3. A paragraph that summarises the tests added or changed and what they check, in one or two sentences, without listing each test. If the only test change is incidental, such as import order, cover it in its area's paragraph instead.
+3. A paragraph that summarises in one or two sentences what the tests added or changed cover as a whole, such as "Add tests that check idempotency keys are handled as the design describes". Don't list the tests or the behaviours they check; the diff shows those. Say whether the tests are new, or existing ones that were extended or changed, such as "Update the CORS preflight test to check the new header as well". If the only test change is incidental, such as import order, cover it in its area's paragraph instead.
 
 Never describe how something is implemented; the code shows that. Name places and things explicitly rather than "there" or "it". End with the trailer AGENTS.md requires.
 
