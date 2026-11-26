@@ -60,17 +60,18 @@ def test_preflight_to_the_api_needs_no_current_user(cors_client: TestClient) -> 
     assert response.headers["access-control-allow-origin"] == ALLOWED
 
 
-@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
 def test_preflight_for_method_in_the_api_is_allowed(
     cors_client: TestClient, method: str
 ) -> None:
     assert preflight(cors_client, ALLOWED, method=method).status_code == 200
 
 
+@pytest.mark.parametrize("method", ["PATCH", "TRACE"])
 def test_preflight_for_method_not_in_the_api_is_refused(
-    cors_client: TestClient,
+    cors_client: TestClient, method: str
 ) -> None:
-    assert preflight(cors_client, ALLOWED, method="TRACE").status_code == 400
+    assert preflight(cors_client, ALLOWED, method=method).status_code == 400
 
 
 @pytest.mark.parametrize("header", ["Content-Type", "Idempotency-Key"])
