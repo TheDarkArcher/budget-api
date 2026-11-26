@@ -49,6 +49,13 @@ Breaking changes are listed under their own **Breaking** heading.
   or names the query or header parameter. A malformed id in the path returns
   404, so an operation whose only input is its path documents no 422. An
   unexpected error returns a 500 problem with no internal detail.
+- Cross-origin requests from the origins listed in `CORS_ALLOWED_ORIGINS`,
+  so a browser frontend served from another origin can call the API.
+  Browsers may send the `Content-Type` and `Idempotency-Key` headers and can
+  read the `Location` header of a response.
+- A query parameter sent more than once to a versioned API path is refused,
+  unless it takes a list of values. The refusal is a `/problems/validation`
+  problem whose `errors` entry tells the client to send it only once.
 - Database backups: `uv run poe backup` dumps the database to a timestamped
   file in `backups/`. Dumps are readable only by their owner.
 - Database restores: `uv run poe restore <file>` restores a dump. A restore
