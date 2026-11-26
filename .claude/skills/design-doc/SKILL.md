@@ -32,6 +32,7 @@ description: Conventions for writing and editing docs/DESIGN.md - level of detai
 
 ## Formatting
 - Bold at the start of a line is always a lead-in with the colon inside the bold: `**Lead-in:**`. The only exception is the first sentence of the Overview section. If a section doesn't use lead-ins, its lines don't start with bold at all. Table cells don't count.
+- A lead-in whose sub-bullets hold its own points has no text of its own: the bold lead-in stands alone, and every point goes in a sub-bullet. A lead-in keeps text only when its sub-bullets clarify that text, such as the parts of what it names or the values it lists. Numbered lists and tables under a lead-in count as its sub-bullets.
 - Sub-list items start with a capital letter, unless they open with code.
 - Keep lists tight: no blank lines or indented continuation paragraphs inside a list. Fold a follow-up paragraph into the bullet's own text.
 - Describe a decimal number's limits as "at most N digits, M of them decimal places", so it is clear the decimal places count towards the total.
