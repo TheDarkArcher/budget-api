@@ -98,6 +98,15 @@ def test_name_outside_its_length_after_trimming_is_rejected(
 
 
 @pytest.mark.usefixtures("dummy_user")
+def test_name_with_a_nul_character_is_rejected(probe_client: TestClient) -> None:
+    response = probe_client.post(
+        "/api/v1/test/fields", json={**VALID_BODY, "name": "Corner\x00Store"}
+    )
+    problem_body = assert_problem(response, 422)
+    assert without_error_details(problem_body) == validation_problem("/name")
+
+
+@pytest.mark.usefixtures("dummy_user")
 @pytest.mark.parametrize(
     ("sent", "returned"),
     [

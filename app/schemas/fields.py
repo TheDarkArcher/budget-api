@@ -7,6 +7,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import (
+    AfterValidator,
     BeforeValidator,
     Field,
     PlainSerializer,
@@ -20,8 +21,30 @@ from app.schemas.base import ApiModel
 # ASCII digits only, as `\d` would also match other scripts' digits.
 DECIMAL_STRING_PATTERN = r"^[0-9]+(\.[0-9]+)?$"
 
+
+def reject_nul(value: str) -> str:
+    """Check a string holds no NUL character, which PostgreSQL can't store.
+
+    Args:
+        value: The string sent in the request.
+
+    Returns:
+        The string, unchanged.
+
+    Raises:
+        PydanticCustomError: If the string holds a NUL character.
+    """
+    if "\0" in value:
+        raise PydanticCustomError(
+            "nul_character", "String should not contain a NUL character"
+        )
+    return value
+
+
 Name = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+    AfterValidator(reject_nul),
 ]
 
 
