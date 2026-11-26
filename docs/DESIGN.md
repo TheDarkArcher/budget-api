@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-24 |
+| **Last updated** | 2026-11-26 |
 
 ---
 
@@ -439,9 +439,12 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
   - Paging can't be turned off.
 - **Idempotency:**
   - Every POST that creates a record accepts an optional `Idempotency-Key` header (1–255 characters), following the IETF Idempotency-Key draft.
+  - A key is the header's text as sent, so any quotes are part of the key. The draft requires a quoted string, but many clients send keys without quotes, as other APIs accept, and plain text works for them and for clients that follow the draft.
+  - The header may be sent only once.
   - A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
   - A repeat with the same key and request returns the original response.
-  - A repeat sent while the first request is still running waits for it, where the draft would return 409.
+  - Two requests are the same when they have the same method, the same path and the same body after validation, so key order, whitespace that is trimmed, ignored fields and fields sent with their default value make no difference.
+  - A repeat sent while the first request is still running waits for it. The draft would return 409, but then the client would have to keep sending the request until the first one finished, where waiting gives it the result directly.
   - The same key with a different request is rejected with `/problems/idempotency-key-mismatch`.
   - Only successful creates are stored.
 
@@ -619,6 +622,7 @@ The 201 response holds the full transaction, as `GET /transactions/{id}` returns
 | Deployment target and pipeline behind the `staging` and `production` branches | Later |
 | Enforcing these rules, which only services enforce today, with database triggers as well: at least one line per transaction, the item-category link rule ([Transactions](#41-transactions)), an active item keeping an active size ([Items](#43-items)), an item category being saved with a link ([Categories](#44-categories)), an archived record not being newly used on a transaction, and an item not being created in or unarchived into an archived item category ([Archiving and Deleting](#46-archiving-and-deleting)) | Any time |
 | Concurrency control for PUT, such as an ETag from `updated_at` checked with `If-Match`, so two clients can't overwrite each other's changes | When more than one client edits the same records |
+| How expired idempotency keys are removed: by storage with a TTL or a scheduled job outside the app, instead of the app deleting them on each create sent with a key | When deleting them on each create slows creates down |
 
 ### 11.2 Future Ideas
 - Refunds linked to the original transaction.

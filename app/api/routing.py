@@ -5,7 +5,10 @@ from typing import Any
 
 from fastapi import Request, Response
 from fastapi.routing import APIRoute
-from starlette.datastructures import QueryParams
+from starlette.datastructures import Headers, QueryParams
+
+# The headers the API's own rules allow only once, in lower case.
+SINGLE_VALUE_HEADERS = frozenset({"idempotency-key"})
 
 
 class RepeatedParameter:
@@ -38,8 +41,34 @@ class SingleValueQueryParams(QueryParams):
         return super().get(key, default)
 
 
+class SingleValueHeaders(Headers):
+    """Headers of which some are refused when repeated."""
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return a header's value.
+
+        Args:
+            key: The header's name.
+            default: What to return if the header wasn't sent.
+
+        Returns:
+            The value, or a ``RepeatedParameter`` if the header may be sent
+            only once and was sent more often.
+        """
+        if key.lower() in SINGLE_VALUE_HEADERS and len(self.getlist(key)) > 1:
+            return RepeatedParameter()
+        return super().get(key, default)
+
+
 class SingleValueRequest(Request):
-    """A request whose query parameters are refused when repeated."""
+    """A request whose single-value parameters are refused when repeated."""
+
+    @property
+    def headers(self) -> Headers:
+        """The request's headers."""
+        if not hasattr(self, "_single_value_headers"):
+            self._single_value_headers = SingleValueHeaders(scope=self.scope)
+        return self._single_value_headers
 
     @property
     def query_params(self) -> QueryParams:
@@ -54,8 +83,9 @@ class SingleValueRequest(Request):
 class SingleValueRoute(APIRoute):
     """A route that refuses a query parameter sent twice, unless it's a list.
 
-    Every router of a versioned API sets this as its ``route_class``, as
-    FastAPI otherwise keeps the last value sent.
+    It refuses the headers in ``SINGLE_VALUE_HEADERS`` sent twice too. Every
+    router of a versioned API sets this as its ``route_class``, as FastAPI
+    otherwise keeps one of the values sent.
     """
 
     def get_route_handler(
@@ -69,7 +99,7 @@ class SingleValueRoute(APIRoute):
         handle = super().get_route_handler()
 
         async def handle_single_values(request: Request) -> Response:
-            """Handle a request, refusing repeated query parameters.
+            """Handle a request, refusing repeated single-value parameters.
 
             Args:
                 request: The incoming request.

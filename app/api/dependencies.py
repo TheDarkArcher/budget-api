@@ -6,6 +6,8 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy import Connection
 
+from app.api.idempotency import IdempotencyKeyHeader, IdempotentCreate
+from app.repositories.idempotency_keys import SQLIdempotencyKeyRepository
 from app.repositories.users import SQLUserRepository, User, UserRepository
 
 
@@ -59,3 +61,32 @@ def get_current_user(request: Request) -> User:
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+def get_idempotent_create(
+    request: Request,
+    connection: ConnectionDep,
+    user: CurrentUserDep,
+    key: IdempotencyKeyHeader = None,
+) -> IdempotentCreate:
+    """Provide the current user's create request, with its key if it has one.
+
+    Args:
+        request: The request, after the current-user resolver has run.
+        connection: The request's database connection.
+        user: The current user.
+        key: The request's ``Idempotency-Key`` header.
+
+    Returns:
+        The create request.
+    """
+    return IdempotentCreate(
+        SQLIdempotencyKeyRepository(connection),
+        user.id,
+        request.method,
+        request.scope["path"],
+        key,
+    )
+
+
+IdempotentCreateDep = Annotated[IdempotentCreate, Depends(get_idempotent_create)]

@@ -3,3 +3,4 @@
 - [Candidate issues](candidate-issues.md) — open candidate findings with review counts; drop when fixed or rejected
 - [Operation id decisions](accepted-operation-id-decisions.md) — 8.10 id table settled 2026-11-23; irregular plurals declined, verb rule deferred
 - [Conventions decisions](accepted-conventions-decisions.md) — 8.7 money bullet, no `"5."`, paging always on; settled 2026-11-24
+- [Idempotency decisions](accepted-idempotency-decisions.md) — repeated-header 422, replay marker, wait limit, key counting, example declined 2026-11-25
