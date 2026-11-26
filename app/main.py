@@ -7,11 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api import health, v1
-from app.api.current_user import ConnectionOpener, CurrentUserMiddleware
+from app.api.current_user import CurrentUserMiddleware
 from app.api.openapi import document_problem_responses
 from app.api.problems import add_problem_handlers
 from app.core.config import get_settings
 from app.database import engine
+from app.database.engine import ConnectionOpener
 
 
 class BudgetAPI(FastAPI):
@@ -35,8 +36,8 @@ def create_app(open_connection: ConnectionOpener = engine.open_connection) -> Fa
     one is set, so a running app's schema identifies its exact build.
 
     Args:
-        open_connection: Opens each request's connection and transaction;
-            tests pass one that opens a savepoint instead.
+        open_connection: Opens the connections a request uses, each in a
+            transaction; tests pass one that opens a savepoint instead.
 
     Returns:
         The configured FastAPI application.
@@ -48,6 +49,7 @@ def create_app(open_connection: ConnectionOpener = engine.open_connection) -> Fa
     app = BudgetAPI(
         title="Budget Tracker API", version=settings.app_build or __version__
     )
+    app.state.open_connection = open_connection
     # Middleware added later wraps what was added before. The problem
     # handlers wrap the resolver, so its failures become 500 problems, and
     # CORS wraps both, so preflights skip the resolver and every problem is

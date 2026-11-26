@@ -97,8 +97,8 @@ def probe_router(monkeypatch: pytest.MonkeyPatch) -> APIRouter:
 
 @pytest.fixture
 def make_app(connection: Connection) -> Callable[[], FastAPI]:
-    # A savepoint per request, so the request's writes are kept or rolled
-    # back as open_connection's transaction does.
+    # A savepoint for each connection a request opens, so its writes are kept
+    # or rolled back as open_connection's transaction does.
     @contextmanager
     def open_savepoint() -> Generator[Connection]:
         with connection.begin_nested():

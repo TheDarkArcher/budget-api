@@ -147,8 +147,16 @@ flowchart LR
 - **App:** a stateless FastAPI server.
   - **Handlers:** parse requests and shape responses.
   - **Services:** hold the business rules, as marked in [Domain Rules](#4-domain-rules).
-  - **Data access:** runs hand-written SQL. Services depend on data-access interfaces, not on the SQL implementations, and are given the implementations by their caller; in the API layer, a FastAPI dependency builds them for each request. All the implementations used for one unit of work share a single connection, so the business rules in a service run in one database transaction.
-  - **Current-user resolver:** runs in front of every request to a versioned API path (`/api/v1`, `/api/v2` and so on), first in the error order in [Errors](#89-errors). In Milestone 1 it resolves every request to the seeded dummy user, the stub that Milestone 3's authentication replaces. It looks the user up on the same database connection the request's data-access implementations use, so a request still uses one database connection. The endpoints outside the versioned API paths, listed in [API Design](#8-api-design), don't need a current user.
+  - **Data access:**
+    - Runs hand-written SQL.
+    - Services depend on data-access interfaces, not on the SQL implementations, and are given the implementations by their caller; in the API layer, a FastAPI dependency builds them for each request.
+    - All the implementations used for one unit of work share a single connection, so the business rules in a service run in one database transaction.
+    - A request's database transaction commits when its endpoint returns, before the response starts, so a failed commit gives a 500 rather than a success, and a client can read a record as soon as the response that created it arrives.
+  - **Current-user resolver:**
+    - It runs in front of every request to a versioned API path (`/api/v1`, `/api/v2` and so on), first in the error order in [Errors](#89-errors).
+    - In Milestone 1 it resolves every request to the seeded dummy user, the stub that Milestone 3's authentication replaces.
+    - It looks the user up on a connection of its own, which it closes before the endpoint opens the request's connection, so a request holds only one database connection at a time.
+    - The endpoints outside the versioned API paths, listed in [API Design](#8-api-design), don't need a current user.
 - **Database:** the single source of truth; schema managed with versioned migrations.
 - **Containers:** Docker Compose runs PostgreSQL and the backend, as described in [Local Development](#96-local-development).
 - **CORS:** allowed origins come from `CORS_ALLOWED_ORIGINS`. Preflight requests are answered before the current-user resolver, and every response, errors included, carries the CORS headers.
