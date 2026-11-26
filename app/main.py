@@ -58,7 +58,7 @@ def create_app(open_connection: ConnectionOpener = engine.open_connection) -> Fa
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Idempotency-Key"],
         expose_headers=["Location"],
     )
     app.include_router(health.router)

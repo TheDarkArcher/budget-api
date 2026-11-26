@@ -73,10 +73,11 @@ def test_preflight_for_method_not_in_the_api_is_refused(
     assert preflight(cors_client, ALLOWED, method="TRACE").status_code == 400
 
 
-def test_preflight_for_content_type_header_is_allowed(
-    cors_client: TestClient,
+@pytest.mark.parametrize("header", ["Content-Type", "Idempotency-Key"])
+def test_preflight_for_header_in_the_api_is_allowed(
+    cors_client: TestClient, header: str
 ) -> None:
-    response = preflight(cors_client, ALLOWED, request_headers="Content-Type")
+    response = preflight(cors_client, ALLOWED, request_headers=header)
     assert response.status_code == 200
 
 
