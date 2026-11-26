@@ -1,7 +1,7 @@
 """Database engine and connections."""
 
-from collections.abc import Generator
-from contextlib import contextmanager
+from collections.abc import Callable, Generator
+from contextlib import AbstractContextManager, contextmanager
 from functools import lru_cache
 
 from sqlalchemy import URL, Connection, Engine, create_engine, make_url, text, tstring
@@ -21,6 +21,9 @@ KEEPALIVE_ARGS = {
     "keepalives_count": 3,
     "tcp_user_timeout": 10_000,
 }
+
+# Opens a connection in a transaction, as open_connection does.
+ConnectionOpener = Callable[[], AbstractContextManager[Connection]]
 
 
 def get_database_url() -> URL:
@@ -78,10 +81,10 @@ def get_ping_engine() -> Engine:
 
 @contextmanager
 def open_connection() -> Generator[Connection]:
-    """Open a connection in a transaction for one request.
+    """Open a connection in a transaction.
 
-    The transaction commits if the request finishes and rolls back if it
-    raises.
+    The transaction commits if the block using it finishes and rolls back if
+    it raises.
 
     Yields:
         A database connection.

@@ -7,29 +7,30 @@ from fastapi import Depends, Request
 from sqlalchemy import Connection
 
 from app.api.idempotency import IdempotencyKeyHeader, IdempotentCreate
+from app.database.engine import ConnectionOpener
 from app.repositories.idempotency_keys import SQLIdempotencyKeyRepository
 from app.repositories.users import SQLUserRepository, User, UserRepository
 
 
 def get_connection(request: Request) -> Iterator[Connection]:
-    """Provide the request's connection, in a savepoint for the endpoint's work.
+    """Provide the request's connection, in a transaction for the endpoint's work.
 
-    The current-user resolver opens the connection and its transaction. The
-    savepoint rolls back if the endpoint raises, so a failed request keeps
-    none of its writes even though the resolver's transaction commits.
+    The transaction commits when the endpoint returns, before the response
+    starts, so a failed commit gives a 500 rather than a success. It rolls
+    back if the endpoint raises, so a failed request keeps none of its writes.
 
     Args:
-        request: The request, after the current-user resolver has run.
+        request: The request being handled.
 
     Yields:
         The request's database connection.
     """
-    connection: Connection = request.state.connection
-    with connection.begin_nested():
+    open_connection: ConnectionOpener = request.app.state.open_connection
+    with open_connection() as connection:
         yield connection
 
 
-ConnectionDep = Annotated[Connection, Depends(get_connection)]
+ConnectionDep = Annotated[Connection, Depends(get_connection, scope="function")]
 
 
 def get_user_repository(connection: ConnectionDep) -> UserRepository:

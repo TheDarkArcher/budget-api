@@ -77,7 +77,7 @@ def payee_creator(connection: Connection, owner: UUID) -> Callable[[], NewRecord
 def create_payee(
     connection: Connection, user: UUID, body: PayeeBody = BODY, key: str | None = KEY
 ) -> Response:
-    # In a savepoint, as get_connection gives every endpoint.
+    # In a transaction, as get_connection gives every endpoint.
     with connection.begin_nested():
         return idempotent_create(connection, user, key).run(
             body, payee_creator(connection, user)
