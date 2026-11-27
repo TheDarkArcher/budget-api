@@ -3,8 +3,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from enum import StrEnum
+from typing import Any
 
-from sqlalchemy import Connection, RowMapping, TextClause, TString, text, tstring
+from sqlalchemy import Connection, Row, TextClause, TString, text, tstring
 
 from app.core.list_options import NameSort, SortOrder
 from app.repositories.lists import LookupResourceCriteria, PageCriteria, RecordPage
@@ -33,9 +34,7 @@ class SQLLists[Criteria: PageCriteria](ABC):
         """
         self._connection = connection
 
-    def fetch_page(
-        self, records: TString, criteria: Criteria
-    ) -> RecordPage[RowMapping]:
+    def fetch_page(self, records: TString, criteria: Criteria) -> RecordPage[Row[Any]]:
         """Fetch one page of the records that match the criteria.
 
         Args:
@@ -62,7 +61,7 @@ class SQLLists[Criteria: PageCriteria](ABC):
             ORDER BY {self._order_by(criteria)}
             LIMIT {criteria.page_size} OFFSET {offset}
         """)
-        rows = self._connection.execute(page_query).mappings().all()
+        rows = self._connection.execute(page_query).all()
 
         return RecordPage(rows, total_items)
 

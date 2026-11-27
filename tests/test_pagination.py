@@ -79,7 +79,7 @@ def list_payees(
     page = SQLLookupResourceLists(connection, SQL_NAME_SORTS).fetch_page(
         payees, criteria
     )
-    records = [ProbeRecord(record_name=row["name"]) for row in page.records]
+    records = [ProbeRecord(record_name=row.name) for row in page.records]
     return Page.build(records, parameters, page.total_items)
 
 
@@ -93,7 +93,7 @@ def list_tags(
     )
     criteria = lookup_resource_criteria(parameters, ArchivedFilter.ALL)
     page = SQLLookupResourceLists(connection, SQL_NAME_SORTS).fetch_page(tags, criteria)
-    records = [ProbeRecord(record_name=row["name"]) for row in page.records]
+    records = [ProbeRecord(record_name=row.name) for row in page.records]
     return Page.build(records, parameters, page.total_items)
 
 
@@ -118,7 +118,7 @@ def list_items(
         ProbeItemSort.ITEM_CATEGORY: ITEM_CATEGORY_ORDER,
     }
     page = SQLLookupResourceLists(connection, sorts).fetch_page(items, criteria)
-    records = [ProbeRecord(record_name=row["name"]) for row in page.records]
+    records = [ProbeRecord(record_name=row.name) for row in page.records]
     return Page.build(records, parameters, page.total_items)
 
 
@@ -350,7 +350,7 @@ def test_equal_sort_keys_are_ordered_by_id_in_the_same_order(
             page_size=page_size,
         )
         fetched = lists.fetch_page(everyones_payees, criteria)
-        return [row["name"] for row in fetched.records]
+        return [row.name for row in fetched.records]
 
     assert listed(SortOrder.ASC) == ["same", "SAME"]
     assert listed(SortOrder.DESC) == ["SAME", "same"]
