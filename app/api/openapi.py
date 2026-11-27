@@ -13,7 +13,9 @@ HTTP_METHODS = frozenset(
 )
 
 
-def documented_problem(description: str) -> dict[str, Any]:
+def documented_problem(
+    description: str, model: type[Problem[Any]] = Problem
+) -> dict[str, Any]:
     """Describe an error response for a route's or router's ``responses``.
 
     FastAPI documents the problem schema under the route's own media type;
@@ -21,12 +23,14 @@ def documented_problem(description: str) -> dict[str, Any]:
 
     Args:
         description: What the error means for the operation, for clients.
+        model: The problem's schema, a subclass of ``Problem`` for a problem
+            with extension members.
 
     Returns:
         The OpenAPI response, in the form FastAPI's ``responses`` takes.
     """
     return {
-        "model": Problem,
+        "model": model,
         "description": description,
         "content": {PROBLEM_MEDIA_TYPE: {}},
     }

@@ -12,8 +12,14 @@ from app.api.dependencies import (
 )
 from app.api.idempotency import NewRecord
 from app.api.openapi import documented_problem
+from app.api.problems import NAME_CONFLICT, ProblemError
 from app.api.routing import SingleValueRoute
-from app.schemas.payees import PayeeRequest, PayeeResponse
+from app.schemas.payees import (
+    PayeeNameConflictProblem,
+    PayeeReference,
+    PayeeRequest,
+    PayeeResponse,
+)
 from app.services import payees
 
 router = APIRouter(prefix="/payees", tags=["payees"], route_class=SingleValueRoute)
@@ -41,7 +47,12 @@ PAYEE_NOT_FOUND = documented_problem(
                     "schema": {"type": "string"},
                 }
             },
-        }
+        },
+        409: documented_problem(
+            "The current user already has a payee with this name, ignoring case,"
+            " archived or not; `existing` names it",
+            PayeeNameConflictProblem,
+        ),
     },
 )
 def create_payee(
@@ -62,10 +73,21 @@ def create_payee(
 
     Returns:
         The 201 response holding the new payee.
+
+    Raises:
+        ProblemError: A name conflict, if the user already has a payee with
+            the name.
     """
 
     def create() -> NewRecord:
-        payee = payees.create_payee(payee_repo, user.id, body.name)
+        try:
+            payee = payees.create_payee(payee_repo, user.id, body.name)
+        except payees.PayeeNameConflictError as error:
+            raise ProblemError(
+                NAME_CONFLICT,
+                f"A payee named '{error.existing.name}' already exists.",
+                existing=PayeeReference.from_payee(error.existing),
+            ) from error
         location = request.app.url_path_for("get_payee", payeeId=str(payee.id))
         return NewRecord(PayeeResponse.from_payee(payee), location)
 

@@ -68,6 +68,77 @@ def test_create_repeated_with_the_same_idempotency_key_replays_it(
 
 
 @pytest.mark.usefixtures("dummy_user")
+def test_create_returns_name_conflict_problem_for_a_name_in_use_ignoring_case(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = post_payee(client, "CORNER STORE")
+    problem_body = assert_problem(response, 409)
+    assert problem_body == {
+        "type": "/problems/name-conflict",
+        "title": "Name already in use",
+        "status": 409,
+        "detail": "A payee named 'Corner Store' already exists.",
+        "existing": {"id": str(payee_id), "name": "Corner Store", "archivedAt": None},
+    }
+    assert payees_count(connection) == 1
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_create_returns_name_conflict_problem_for_an_archived_payees_name(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
+    archived_at = one(
+        connection,
+        "SELECT archived_at FROM payees WHERE id = :payee_id",
+        payee_id=payee_id,
+    )
+    response = post_payee(client, "Corner Store")
+    problem_body = assert_problem(response, 409)
+    existing = with_parsed_archive_time(problem_body["existing"])
+    assert {**problem_body, "existing": existing} == {
+        "type": "/problems/name-conflict",
+        "title": "Name already in use",
+        "status": 409,
+        "detail": "A payee named 'Corner Store' already exists.",
+        "existing": {
+            "id": str(payee_id),
+            "name": "Corner Store",
+            "archivedAt": archived_at,
+        },
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_create_accepts_a_name_another_user_has(
+    client: TestClient, connection: Connection, alice: World
+) -> None:
+    add_payee(connection, alice.user, "Corner Store")
+    response = post_payee(client, "Corner Store")
+    payee_id = payee_id_named(connection, "Corner Store")
+    assert response.status_code == 201
+    assert response.json() == {
+        "id": str(payee_id),
+        "name": "Corner Store",
+        "archivedAt": None,
+    }
+
+
+def test_create_documents_its_name_conflict_problem(client: TestClient) -> None:
+    document = client.get("/openapi.json").json()
+    operation = document["paths"][PATH]["post"]
+    schemas = document["components"]["schemas"]
+    conflict = operation["responses"]["409"]["content"]["application/problem+json"]
+    assert conflict["schema"] == {
+        "$ref": "#/components/schemas/PayeeNameConflictProblem"
+    }
+    properties = schemas["PayeeNameConflictProblem"]["properties"]
+    assert properties["type"]["const"] == "/problems/name-conflict"
+    assert properties["existing"]["$ref"] == "#/components/schemas/PayeeReference"
+
+
+@pytest.mark.usefixtures("dummy_user")
 def test_get_returns_the_payee(client: TestClient, connection: Connection) -> None:
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = client.get(f"{PATH}/{payee_id}")
