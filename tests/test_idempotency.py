@@ -23,7 +23,7 @@ from app.api.idempotency import IdempotentCreate, NewRecord
 from app.api.problems import IDEMPOTENCY_KEY_MISMATCH, ProblemError
 from app.core.errors import NameConflictError
 from app.repositories.idempotency_keys import SQLIdempotencyKeyRepository
-from app.schemas.base import ApiModel
+from app.schemas.base import ApiModel, RequestBody
 from app.schemas.fields import DecimalString, Name
 
 # =====================
@@ -37,7 +37,7 @@ PATH = "/api/v1/payees"
 DEADLINE_SECONDS = 10
 
 
-class PayeeBody(ApiModel):
+class PayeeBody(RequestBody):
     name: Name
     credit_limit: DecimalString = Decimal(0)
     tag_ids: list[UUID] = Field(default_factory=list)
@@ -341,11 +341,6 @@ def test_repeat_replays_the_original_response_without_creating(
             '{"name": "Milk Shop", "creditLimit": "5"}',
             '{"name": "Milk Shop", "creditLimit": "5.0"}',
             id="trailing zero",
-        ),
-        pytest.param(
-            '{"name": "Milk Shop"}',
-            '{"name": "Milk Shop", "archivedAt": null}',
-            id="ignored field",
         ),
         pytest.param(
             '{"name": "Milk Shop"}',

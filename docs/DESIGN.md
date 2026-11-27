@@ -287,7 +287,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 | GET | `/{resource}` | Paged list | |
 | POST | `/{resource}` | Create | `/problems/name-conflict`, `/problems/idempotency-key-mismatch` |
 | GET | `/{resource}/{id}` | One record, archived or not | |
-| PUT | `/{resource}/{id}` | Replace the record, including the links it owns. `archivedAt` is ignored | `/problems/archived`, `/problems/name-conflict` |
+| PUT | `/{resource}/{id}` | Replace the record, including the links it owns | `/problems/archived`, `/problems/name-conflict` |
 | DELETE | `/{resource}/{id}` | Delete the record | `/problems/in-use/*` |
 | POST | `/{resource}/{id}/archive` | Returns the record. Archiving an archived record changes nothing. Not for tags | |
 | POST | `/{resource}/{id}/unarchive` | Returns the record. Unarchiving an active record changes nothing. Not for tags | `/problems/parent-archived/item-category` (items only) |
@@ -316,7 +316,6 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 - **Item sizes:**
   - Managed through `sizes` on `POST /items` and `PUT /items/{itemId}`, following the size rules in [Archiving and Deleting](#46-archiving-and-deleting).
   - A size is identified by its value and unit, with values compared as numbers: `"500"` and `"500.0"` are the same size.
-  - A size's `id` and `archivedAt` in a request body are ignored.
   - `GET /items/{itemId}/sizes` lists an item's sizes with their `archivedAt` under `data`. It isn't paged and takes `?archived=false|true|all`, default `false`.
 - **Tags:** deleted rather than archived. They take no `?archived=` and have no `archivedAt`.
 - **Filtering by transaction category:** on item categories and items, `?transactionCategoryId=` matches through the item category's links, including links that don't apply while either category is archived.
@@ -424,6 +423,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 ### 8.7 Conventions
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case.
 - **Path parameters:** camelCase, named as the singular of the resource whose record they identify plus `Id`, such as `payeeId` in `/payees/{payeeId}` and `itemCategoryId` in `/item-categories/{itemCategoryId}`.
+- **Request bodies:** a body with a field the endpoint doesn't declare, at its top level or in an object nested in it, is refused, with an `errors` entry pointing at each such field.
 - **Decimal numbers:**
   - Sent as JSON strings in requests and responses.
   - A request's string is trimmed of surrounding whitespace.
@@ -435,6 +435,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
   - An id must be well-formed.
   - A value must be within the parameter's allowed values or limits.
   - Only a parameter marked repeatable may be sent more than once.
+  - A parameter the endpoint doesn't declare is ignored.
 - **Filters:**
   - On any list, an unknown, another user's or archived id in a filter only narrows the result.
   - A `from` date after `to` returns an empty list.
@@ -452,7 +453,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
   - The header may be sent only once.
   - A key is scoped to the user who sent it, or to requests with no user (such as registration in Milestone 3), and lasts 24 hours.
   - A repeat with the same key and request returns the original response.
-  - Two requests are the same when they have the same method, the same path and the same body after validation, so key order, whitespace that is trimmed, ignored fields and fields sent with their default value make no difference.
+  - Two requests are the same when they have the same method, the same path and the same body after validation, so key order, whitespace that is trimmed and fields sent with their default value make no difference.
   - A repeat sent while the first request is still running waits for it. The draft would return 409, but then the client would have to keep sending the request until the first one finished, where waiting gives it the result directly.
   - The same key with a different request is rejected with `/problems/idempotency-key-mismatch`.
   - Only successful creates are stored.

@@ -7,13 +7,13 @@ from uuid import UUID
 from pydantic import Field
 
 from app.repositories.payees import Payee
-from app.schemas.base import ApiModel
+from app.schemas.base import ApiModel, RequestBody
 from app.schemas.fields import Name, Reference
 from app.schemas.pagination import Page
 from app.schemas.problems import Problem
 
 
-class PayeeRequest(ApiModel):
+class PayeeRequest(RequestBody):
     """A payee, as a request to create or replace one sends it."""
 
     name: Name = Field(

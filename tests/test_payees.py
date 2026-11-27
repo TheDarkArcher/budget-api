@@ -5,7 +5,12 @@ from uuid import UUID
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from problems import NOT_FOUND_PROBLEM, assert_problem, without_error_details
+from problems import (
+    NOT_FOUND_PROBLEM,
+    assert_problem,
+    parameter_validation_problem,
+    without_error_details,
+)
 from records import World, add_payee
 from responses import response_parts, with_parsed_archive_time
 from sql import count, one
@@ -258,10 +263,4 @@ def test_list_returns_validation_problem_for_a_sort_other_than_name(
 ) -> None:
     response = client.get(PATH, params={"sort": "itemCategory"})
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"parameter": "sort"}],
-    }
+    assert without_error_details(problem_body) == parameter_validation_problem("sort")
