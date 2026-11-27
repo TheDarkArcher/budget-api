@@ -81,6 +81,32 @@ class PayeeRepository(ABC):
         """
 
     @abstractmethod
+    def archive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        """Archive one of a user's active payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to archive.
+
+        Returns:
+            The archived payee, or ``None`` if the user has no active payee
+            with that id.
+        """
+
+    @abstractmethod
+    def unarchive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        """Unarchive one of a user's archived payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to unarchive.
+
+        Returns:
+            The active payee, or ``None`` if the user has no archived payee
+            with that id.
+        """
+
+    @abstractmethod
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
     ) -> RecordPage[Payee]:
@@ -204,6 +230,52 @@ class SQLPayeeRepository(PayeeRepository):
                     RETURNING id, name, archived_at
                 """)
             ).first()
+        return None if row is None else self._payee(row)
+
+    def archive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        """Archive one of a user's active payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to archive.
+
+        Returns:
+            The archived payee, or ``None`` if the user has no active payee
+            with that id.
+        """
+        row = self._connection.execute(
+            tstring(t"""
+                UPDATE payees
+                SET archived_at = now()
+                WHERE user_id = {user_id}
+                    AND id = {payee_id}
+                    AND archived_at IS NULL
+                RETURNING id, name, archived_at
+            """)
+        ).first()
+        return None if row is None else self._payee(row)
+
+    def unarchive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        """Unarchive one of a user's archived payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to unarchive.
+
+        Returns:
+            The active payee, or ``None`` if the user has no archived payee
+            with that id.
+        """
+        row = self._connection.execute(
+            tstring(t"""
+                UPDATE payees
+                SET archived_at = NULL
+                WHERE user_id = {user_id}
+                    AND id = {payee_id}
+                    AND archived_at IS NOT NULL
+                RETURNING id, name, archived_at
+            """)
+        ).first()
         return None if row is None else self._payee(row)
 
     def list(

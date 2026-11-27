@@ -13,9 +13,11 @@ from app.repositories.lists import LookupResourceCriteria, RecordPage
 from app.repositories.payees import Payee
 from app.services.payees import (
     PayeeNameConflictError,
+    archive_payee,
     create_payee,
     get_payee,
     list_payees,
+    unarchive_payee,
     update_payee,
 )
 
@@ -123,3 +125,55 @@ def test_update_payee_raises_name_conflict_naming_the_payee_with_the_name(
     with pytest.raises(PayeeNameConflictError) as raised:
         update_payee(fake_payee_repo, USER_ID, payee.id, "supermarket")
     assert raised.value.existing == existing
+
+
+def test_archive_payee_archives_the_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = fake_payee_repo.create(USER_ID, "Corner Store")
+    archived = archive_payee(fake_payee_repo, USER_ID, payee.id)
+    assert archived == replace(payee, archived_at=fake_payee_repo.now)
+    assert fake_payee_repo.payees == {payee.id: (USER_ID, archived)}
+
+
+def test_archive_payee_leaves_an_archived_payee_unchanged(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = archive(fake_payee_repo, fake_payee_repo.create(USER_ID, "Corner Store"))
+    assert archive_payee(fake_payee_repo, USER_ID, payee.id) == payee
+    assert fake_payee_repo.payees == {payee.id: (USER_ID, payee)}
+
+
+def test_archive_payee_raises_not_found_for_another_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = fake_payee_repo.create(OTHER_USER_ID, "Corner Store")
+    with pytest.raises(NotFoundError):
+        archive_payee(fake_payee_repo, USER_ID, payee.id)
+
+
+def test_unarchive_payee_unarchives_the_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = archive(fake_payee_repo, fake_payee_repo.create(USER_ID, "Corner Store"))
+    unarchived = unarchive_payee(fake_payee_repo, USER_ID, payee.id)
+    assert unarchived == replace(payee, archived_at=None)
+    assert fake_payee_repo.payees == {payee.id: (USER_ID, unarchived)}
+
+
+def test_unarchive_payee_leaves_an_active_payee_unchanged(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = fake_payee_repo.create(USER_ID, "Corner Store")
+    assert unarchive_payee(fake_payee_repo, USER_ID, payee.id) == payee
+    assert fake_payee_repo.payees == {payee.id: (USER_ID, payee)}
+
+
+def test_unarchive_payee_raises_not_found_for_another_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = archive(
+        fake_payee_repo, fake_payee_repo.create(OTHER_USER_ID, "Corner Store")
+    )
+    with pytest.raises(NotFoundError):
+        unarchive_payee(fake_payee_repo, USER_ID, payee.id)

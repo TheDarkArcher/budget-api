@@ -394,6 +394,114 @@
         }
       }
     },
+    "/api/v1/payees/{payeeId}/archive": {
+      "post": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Archive a payee",
+        "description": "Archive one of the current user's payees, which hides it from lists by default. Archiving an archived payee changes nothing, so its `archivedAt` keeps its first value and the request is safe to repeat.",
+        "operationId": "archivePayee",
+        "parameters": [
+          {
+            "name": "payeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Payeeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The archived payee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current user has no payee with this id, or the id is malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payees/{payeeId}/unarchive": {
+      "post": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Unarchive a payee",
+        "description": "Unarchive one of the current user's payees. Unarchiving an active payee changes nothing, so the request is safe to repeat.",
+        "operationId": "unarchivePayee",
+        "parameters": [
+          {
+            "name": "payeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Payeeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active payee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current user has no payee with this id, or the id is malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me": {
       "get": {
         "tags": [
