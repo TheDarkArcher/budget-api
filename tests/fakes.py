@@ -1,8 +1,9 @@
 """Fake data-access repositories that record what is written, for service tests."""
 
+from dataclasses import replace
 from uuid import UUID, uuid4
 
-from app.core.errors import NameConflictError
+from app.core.errors import ArchivedError, NameConflictError
 from app.core.list_options import NameSort
 from app.repositories.item_categories import ItemCategoryRepository
 from app.repositories.lists import LookupResourceCriteria, RecordPage
@@ -29,9 +30,9 @@ class FakeItemCategoryRepository(ItemCategoryRepository):
 class FakePayeeRepository(PayeeRepository):
     """Keeps payees in memory, by id, with the id of the user who owns each.
 
-    Refuses a name the user already has, ignoring case, as the database does.
-    Lists every one of the user's payees on one page, recording the criteria
-    it was given rather than applying them.
+    Refuses a name the user already has, ignoring case, and any change to an
+    archived payee, as the database does. Lists every one of the user's payees
+    on one page, recording the criteria it was given rather than applying them.
     """
 
     def __init__(self) -> None:
@@ -48,6 +49,19 @@ class FakePayeeRepository(PayeeRepository):
     def get(self, user_id: UUID, payee_id: UUID) -> Payee | None:
         owner, payee = self.payees.get(payee_id, (None, None))
         return payee if owner == user_id else None
+
+    def update(self, user_id: UUID, payee_id: UUID, name: str) -> Payee | None:
+        payee = self.get(user_id, payee_id)
+        if payee is None:
+            return None
+        if payee.archived_at is not None:
+            raise ArchivedError
+        clash = self.get_by_name(user_id, name)
+        if clash is not None and clash.id != payee_id:
+            raise NameConflictError
+        updated = replace(payee, name=name)
+        self.payees[payee_id] = (user_id, updated)
+        return updated
 
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]

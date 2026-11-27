@@ -14,7 +14,7 @@ from app.schemas.problems import Problem
 
 
 class PayeeRequest(RequestBody):
-    """A payee, as a request to create or replace one sends it."""
+    """A payee, as a request to create or update one sends it."""
 
     name: Name = Field(
         description="The payee's name. Surrounding whitespace is trimmed, and it"

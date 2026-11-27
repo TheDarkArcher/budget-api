@@ -63,6 +63,24 @@ class PayeeRepository(ABC):
         """
 
     @abstractmethod
+    def update(self, user_id: UUID, payee_id: UUID, name: str) -> Payee | None:
+        """Rename one of a user's payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to rename.
+            name: The payee's new name.
+
+        Returns:
+            The renamed payee, or ``None`` if the user has no payee with that
+            id.
+
+        Raises:
+            NameConflictError: If the user has another payee with the name.
+            ArchivedError: If the payee is archived.
+        """
+
+    @abstractmethod
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
     ) -> RecordPage[Payee]:
@@ -159,6 +177,33 @@ class SQLPayeeRepository(PayeeRepository):
                 WHERE user_id = {user_id} AND lower(name) = lower({name})
             """)
         ).first()
+        return None if row is None else self._payee(row)
+
+    def update(self, user_id: UUID, payee_id: UUID, name: str) -> Payee | None:
+        """Rename one of a user's payees.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to rename.
+            name: The payee's new name.
+
+        Returns:
+            The renamed payee, or ``None`` if the user has no payee with that
+            id.
+
+        Raises:
+            NameConflictError: If the user has another payee with the name.
+            ArchivedError: If the payee is archived.
+        """
+        with translate_sql_constraint_errors(self._connection):
+            row = self._connection.execute(
+                tstring(t"""
+                    UPDATE payees
+                    SET name = {name}
+                    WHERE user_id = {user_id} AND id = {payee_id}
+                    RETURNING id, name, archived_at
+                """)
+            ).first()
         return None if row is None else self._payee(row)
 
     def list(

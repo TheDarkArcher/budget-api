@@ -113,11 +113,7 @@ def create_payee(
         try:
             payee = payees.create_payee(payee_repo, user.id, body.name)
         except payees.PayeeNameConflictError as error:
-            raise ProblemError(
-                NAME_CONFLICT,
-                f"A payee named '{error.existing.name}' already exists.",
-                existing=PayeeReference.from_payee(error.existing),
-            ) from error
+            raise name_conflict_problem(error) from error
         location = request.app.url_path_for("get_payee", payeeId=str(payee.id))
         return NewRecord(PayeeResponse.from_payee(payee), location)
 
@@ -146,3 +142,63 @@ def get_payee(
         The payee.
     """
     return PayeeResponse.from_payee(payees.get_payee(payee_repo, user.id, payee_id))
+
+
+@router.put(
+    "/{payeeId}",
+    operation_id="updatePayee",
+    summary="Update a payee",
+    description="Update the entire payee, one of the current user's active ones."
+    " Archive or unarchive a payee with its own endpoints.",
+    response_description="The updated payee",
+    responses={
+        404: PAYEE_NOT_FOUND,
+        409: documented_problem(
+            "The payee is archived (`/problems/archived`), or the current user"
+            " already has another payee with this name, ignoring case, archived"
+            " or not (`/problems/name-conflict`, with `existing` naming it)"
+        ),
+    },
+)
+def update_payee(
+    payee_id: PayeeIdPath,
+    body: PayeeRequest,
+    payee_repo: PayeeRepositoryDep,
+    user: CurrentUserDep,
+) -> PayeeResponse:
+    """Update the entire payee, one of the current user's active ones.
+
+    Args:
+        payee_id: The id of the payee to update.
+        body: The payee's new values.
+        payee_repo: The repository the payee is stored in.
+        user: The current user.
+
+    Returns:
+        The updated payee.
+
+    Raises:
+        ProblemError: A name conflict, if the user already has another payee
+            with the name.
+    """
+    try:
+        payee = payees.update_payee(payee_repo, user.id, payee_id, body.name)
+    except payees.PayeeNameConflictError as error:
+        raise name_conflict_problem(error) from error
+    return PayeeResponse.from_payee(payee)
+
+
+def name_conflict_problem(error: payees.PayeeNameConflictError) -> ProblemError:
+    """Build the name conflict problem for a payee's name.
+
+    Args:
+        error: The conflict, naming the payee that already has the name.
+
+    Returns:
+        The problem, with ``existing`` naming that payee.
+    """
+    return ProblemError(
+        NAME_CONFLICT,
+        f"A payee named '{error.existing.name}' already exists.",
+        existing=PayeeReference.from_payee(error.existing),
+    )

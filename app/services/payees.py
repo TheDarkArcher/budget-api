@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from app.core.errors import NameConflictError, NotFoundError
+from app.core.errors import ArchivedError, NameConflictError, NotFoundError
 from app.core.list_options import NameSort
 from app.repositories.lists import LookupResourceCriteria, RecordPage
 from app.repositories.payees import Payee, PayeeRepository
@@ -39,12 +39,7 @@ def create_payee(payee_repo: PayeeRepository, user_id: UUID, name: str) -> Payee
     try:
         return payee_repo.create(user_id, name)
     except NameConflictError as error:
-        existing = payee_repo.get_by_name(user_id, name)
-        # A clashing payee deleted since the insert can't be named, so the
-        # conflict is reported as an unexpected error.
-        if existing is None:
-            raise
-        raise PayeeNameConflictError(existing) from error
+        raise name_conflict(payee_repo, user_id, name, error) from error
 
 
 def get_payee(payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID) -> Payee:
@@ -84,3 +79,63 @@ def list_payees(
         The payees on the page, and how many match in all.
     """
     return payee_repo.list(user_id, criteria)
+
+
+def update_payee(
+    payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID, name: str
+) -> Payee:
+    """Update one of a user's payees entirely, which only renames it.
+
+    Args:
+        payee_repo: The repository the payee is stored in.
+        user_id: The id of the user who owns the payee.
+        payee_id: The id of the payee to update.
+        name: The payee's new name.
+
+    Returns:
+        The updated payee.
+
+    Raises:
+        NotFoundError: If the user has no payee with that id, which includes
+            another user's payee.
+        ArchivedError: If the payee is archived, whatever the new name.
+        PayeeNameConflictError: If the user has another payee with the name,
+            ignoring case, archived or not.
+    """
+    if get_payee(payee_repo, user_id, payee_id).archived_at is not None:
+        raise ArchivedError
+    try:
+        updated = payee_repo.update(user_id, payee_id, name)
+    except NameConflictError as error:
+        raise name_conflict(payee_repo, user_id, name, error) from error
+    # A payee deleted since it was found is reported as not found.
+    if updated is None:
+        raise NotFoundError
+    return updated
+
+
+def name_conflict(
+    payee_repo: PayeeRepository,
+    user_id: UUID,
+    name: str,
+    error: NameConflictError,
+) -> PayeeNameConflictError:
+    """Name the payee a refused name belongs to.
+
+    Args:
+        payee_repo: The repository the payees are stored in.
+        user_id: The id of the user who owns the payees.
+        name: The name the repository refused.
+        error: The repository's refusal.
+
+    Returns:
+        The conflict, naming the payee with the name.
+
+    Raises:
+        NameConflictError: The refusal itself, if no payee has the name, as
+            one deleted since the refusal can't be named.
+    """
+    existing = payee_repo.get_by_name(user_id, name)
+    if existing is None:
+        raise error
+    return PayeeNameConflictError(existing)
