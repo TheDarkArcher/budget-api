@@ -59,6 +59,18 @@ class PayeeRepository(ABC):
             The payee, or ``None`` if the user has no payee with that id.
         """
 
+    @abstractmethod
+    def get_by_name(self, user_id: UUID, name: str) -> Payee | None:
+        """Find the user's payee with a name, ignoring case, archived or not.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            name: The name to look for.
+
+        Returns:
+            The payee, or ``None`` if the user has no payee with that name.
+        """
+
 
 class SQLPayeeRepository(PayeeRepository):
     """SQL implementation of the payee repository."""
@@ -109,6 +121,25 @@ class SQLPayeeRepository(PayeeRepository):
                 SELECT id, name, archived_at
                 FROM payees
                 WHERE user_id = {user_id} AND id = {payee_id}
+            """)
+        ).first()
+        return None if row is None else self._payee(row)
+
+    def get_by_name(self, user_id: UUID, name: str) -> Payee | None:
+        """Find the user's payee with a name, ignoring case, archived or not.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            name: The name to look for.
+
+        Returns:
+            The payee, or ``None`` if the user has no payee with that name.
+        """
+        row = self._connection.execute(
+            tstring(t"""
+                SELECT id, name, archived_at
+                FROM payees
+                WHERE user_id = {user_id} AND lower(name) = lower({name})
             """)
         ).first()
         return None if row is None else self._payee(row)

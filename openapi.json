@@ -120,6 +120,16 @@
               }
             }
           },
+          "409": {
+            "description": "The current user already has a payee with this name, ignoring case, archived or not; `existing` names it",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeNameConflictProblem"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -294,6 +304,91 @@
         ],
         "title": "LivenessResponse",
         "description": "Whether the app process is up and serving requests."
+      },
+      "PayeeNameConflictProblem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "/problems/name-conflict",
+            "title": "Type",
+            "description": "A problem type, used as an identifier: a path-absolute URI reference such as `/problems/name-conflict` for 409 and 422 responses, and `about:blank` for every other status. Clients should accept types they don't know."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "A short, fixed summary of the problem type, or the HTTP status phrase for `about:blank`. For display only; match on `type`."
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status",
+            "description": "The HTTP status code of the response."
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "What went wrong in this request, safe to show to the user."
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemErrorEntry"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "The problems with individual fields or parameters. Present only when the request had any."
+          },
+          "existing": {
+            "$ref": "#/components/schemas/PayeeReference",
+            "description": "The payee that already has the name, archived or not."
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "existing"
+        ],
+        "title": "PayeeNameConflictProblem",
+        "description": "A `/problems/name-conflict` problem for a payee's name."
+      },
+      "PayeeReference": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "The record's id."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "The record's name."
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archivedat",
+            "description": "When the record was archived, or null while it's active."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "archivedAt"
+        ],
+        "title": "PayeeReference",
+        "description": "A payee, nested in another record or a problem."
       },
       "PayeeRequest": {
         "properties": {

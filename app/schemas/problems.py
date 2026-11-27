@@ -24,10 +24,13 @@ class ProblemErrorEntry(ApiModel):
     )
 
 
-class Problem(ApiModel):
+# `ProblemTypeUri` is a `Literal` of one problem type in a named problem type's
+# schema, such as `PayeeNameConflictProblem`, so `openapi.json` documents
+# `type` as a constant.
+class Problem[ProblemTypeUri: str = str](ApiModel):
     """An error response, sent as `application/problem+json` (RFC 9457)."""
 
-    type: str = Field(
+    type: ProblemTypeUri = Field(
         description="A problem type, used as an identifier: a path-absolute URI"
         " reference such as `/problems/name-conflict` for 409 and 422 responses,"
         " and `about:blank` for every other status. Clients should accept types"

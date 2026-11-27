@@ -2,6 +2,7 @@
 
 from uuid import UUID, uuid4
 
+from app.core.errors import NameConflictError
 from app.repositories.item_categories import ItemCategoryRepository
 from app.repositories.payees import Payee, PayeeRepository
 from app.repositories.transaction_categories import (
@@ -24,12 +25,17 @@ class FakeItemCategoryRepository(ItemCategoryRepository):
 
 
 class FakePayeeRepository(PayeeRepository):
-    """Keeps payees in memory, by id, with the id of the user who owns each."""
+    """Keeps payees in memory, by id, with the id of the user who owns each.
+
+    Refuses a name the user already has, ignoring case, as the database does.
+    """
 
     def __init__(self) -> None:
         self.payees: dict[UUID, tuple[UUID, Payee]] = {}
 
     def create(self, user_id: UUID, name: str) -> Payee:
+        if self.get_by_name(user_id, name) is not None:
+            raise NameConflictError
         payee = Payee(id=uuid4(), name=name, archived_at=None)
         self.payees[payee.id] = (user_id, payee)
         return payee
@@ -37,6 +43,16 @@ class FakePayeeRepository(PayeeRepository):
     def get(self, user_id: UUID, payee_id: UUID) -> Payee | None:
         owner, payee = self.payees.get(payee_id, (None, None))
         return payee if owner == user_id else None
+
+    def get_by_name(self, user_id: UUID, name: str) -> Payee | None:
+        return next(
+            (
+                payee
+                for owner, payee in self.payees.values()
+                if owner == user_id and payee.name.lower() == name.lower()
+            ),
+            None,
+        )
 
 
 class FakeTransactionCategoryRepository(TransactionCategoryRepository):
