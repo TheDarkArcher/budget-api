@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-27 |
+| **Last updated** | 2026-11-28 |
 
 ---
 
@@ -287,7 +287,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 | GET | `/{resource}` | Paged list | |
 | POST | `/{resource}` | Create | `/problems/name-conflict`, `/problems/idempotency-key-mismatch` |
 | GET | `/{resource}/{id}` | One record, archived or not | |
-| PUT | `/{resource}/{id}` | Replace the record, including the links it owns | `/problems/archived`, `/problems/name-conflict` |
+| PUT | `/{resource}/{id}` | Update the entire record, including the links it owns | `/problems/archived`, `/problems/name-conflict` |
 | DELETE | `/{resource}/{id}` | Delete the record | `/problems/in-use/*` |
 | POST | `/{resource}/{id}/archive` | Returns the record. Archiving an archived record changes nothing. Not for tags | |
 | POST | `/{resource}/{id}/unarchive` | Returns the record. Unarchiving an active record changes nothing. Not for tags | `/problems/parent-archived/item-category` (items only) |
@@ -333,7 +333,7 @@ Except for the [Health](#84-health) endpoints and the [OpenAPI](#810-openapi) do
 | POST | `/transactions` | Create the transaction and its lines in one database transaction | `/problems/item-category-not-linked`, `/problems/idempotency-key-mismatch` |
 | GET | `/transactions/summary` | Totals for the transactions the filters match | |
 | GET | `/transactions/{transactionId}` | The full transaction, including lines | |
-| PUT | `/transactions/{transactionId}` | Replace the transaction and its lines | `/problems/item-category-not-linked` |
+| PUT | `/transactions/{transactionId}` | Update the entire transaction, including its lines | `/problems/item-category-not-linked` |
 | DELETE | `/transactions/{transactionId}` | Delete the transaction and its lines | |
 
 - **Problems column:** lists the problem types specific to each endpoint, as in [Lookup Resources](#81-lookup-resources).
@@ -424,6 +424,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 - **JSON:** camelCase on the wire and in query parameters; the Python code stays snake_case.
 - **Path parameters:** camelCase, named as the singular of the resource whose record they identify plus `Id`, such as `payeeId` in `/payees/{payeeId}` and `itemCategoryId` in `/item-categories/{itemCategoryId}`.
 - **Request bodies:** a body with a field the endpoint doesn't declare, at its top level or in an object nested in it, is refused, with an `errors` entry pointing at each such field.
+- **Updates:** a PUT's body holds every editable field of the record, meaning every field its request schema declares. A field left out is set as it would be on create, or is refused if it's required. There is no PATCH.
 - **Decimal numbers:**
   - Sent as JSON strings in requests and responses.
   - A request's string is trimmed of surrounding whitespace.
@@ -518,7 +519,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 |---|---|---|
 | `GET /{resource}` | `list` plus the plural | `listPayees` |
 | `POST /{resource}` | `create` plus the singular | `createPayee` |
-| `GET`, `PUT` or `DELETE /{resource}/{id}` | `get`, `replace` or `delete` respectively, plus the singular | `getPayee`, `replacePayee`, `deletePayee` |
+| `GET`, `PUT` or `DELETE /{resource}/{id}` | `get`, `update` or `delete` respectively, plus the singular | `getPayee`, `updatePayee`, `deletePayee` |
 | `POST /{resource}/{id}/archive` or `/unarchive` | `archive` or `unarchive` respectively, plus the singular | `archivePayee`, `unarchivePayee` |
 | `GET /{resource}/{id}/{subresource}` | `list` plus the parent's singular plus the sub-resource's plural | `listItemSizes` |
 | Any other `GET` path | `get` plus what it returns | `getCurrentUser`, `getLiveness`, `getReadiness`, `getTransactionSummary` |

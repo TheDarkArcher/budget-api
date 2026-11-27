@@ -71,7 +71,7 @@ def expected_operation_id(method: str, path: str) -> str | None:
         case [resource], "post":
             return f"create{singular(resource)}"
         case [resource, record], "get" | "put" | "delete" if is_placeholder(record):
-            verb = {"get": "get", "put": "replace", "delete": "delete"}[method]
+            verb = {"get": "get", "put": "update", "delete": "delete"}[method]
             return f"{verb}{singular(resource)}"
         case [resource, record, action], "post" if (
             is_placeholder(record) and action in ACTIONS
