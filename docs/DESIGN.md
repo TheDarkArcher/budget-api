@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-26 |
+| **Last updated** | 2026-11-27 |
 
 ---
 
@@ -508,6 +508,10 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
   - Every operation has a short, sentence-case `summary` that reads as its `operationId` in words, such as "List payees".
   - A summary for a single record takes an article, such as "Create a payee" and "Get the current user".
 - **Descriptions:** operation and field descriptions are written for clients, without docstring sections such as `Args:`.
+- **Problem schemas:**
+  - Every named problem type in [Errors](#89-errors) has a schema in which `type` is a constant of that problem type.
+  - A problem type with extension members, such as `existing`, has a schema for each resource that returns it.
+  - Each operation's response for a status references the schema of the one problem type the operation can return with that status. When the operation can return several problem types with that status, the response lists their schemas in a `oneOf` with a `discriminator` on `type`.
 
 | Method and path | Operation id | Example |
 |---|---|---|
