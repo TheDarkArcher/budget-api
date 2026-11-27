@@ -107,6 +107,22 @@ class PayeeRepository(ABC):
         """
 
     @abstractmethod
+    def delete(self, user_id: UUID, payee_id: UUID) -> bool:
+        """Delete one of a user's payees, archived or not.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to delete.
+
+        Returns:
+            Whether the payee was deleted, which it isn't if the user has no
+            payee with that id.
+
+        Raises:
+            InUseError: If a transaction uses the payee.
+        """
+
+    @abstractmethod
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
     ) -> RecordPage[Payee]:
@@ -277,6 +293,30 @@ class SQLPayeeRepository(PayeeRepository):
             """)
         ).first()
         return None if row is None else self._payee(row)
+
+    def delete(self, user_id: UUID, payee_id: UUID) -> bool:
+        """Delete one of a user's payees, archived or not.
+
+        Args:
+            user_id: The id of the user who owns the payee.
+            payee_id: The id of the payee to delete.
+
+        Returns:
+            Whether the payee was deleted, which it isn't if the user has no
+            payee with that id.
+
+        Raises:
+            InUseError: If a transaction uses the payee.
+        """
+        with translate_sql_constraint_errors(self._connection):
+            row = self._connection.execute(
+                tstring(t"""
+                    DELETE FROM payees
+                    WHERE user_id = {user_id} AND id = {payee_id}
+                    RETURNING id
+                """)
+            ).first()
+        return row is not None
 
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]

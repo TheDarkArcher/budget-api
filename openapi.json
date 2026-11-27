@@ -392,6 +392,61 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Delete a payee",
+        "description": "Delete one of the current user's payees, archived or not. A payee that a transaction uses can't be deleted; archive it instead.",
+        "operationId": "deletePayee",
+        "parameters": [
+          {
+            "name": "payeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Payeeid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The payee was deleted"
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current user has no payee with this id, or the id is malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A transaction uses the payee (`/problems/in-use/transaction`), so it can't be deleted; archive it instead",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/payees/{payeeId}/archive": {

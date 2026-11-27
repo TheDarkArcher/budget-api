@@ -188,6 +188,35 @@ def update_payee(
     return PayeeResponse.from_payee(payee)
 
 
+@router.delete(
+    "/{payeeId}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deletePayee",
+    summary="Delete a payee",
+    description="Delete one of the current user's payees, archived or not. A"
+    " payee that a transaction uses can't be deleted; archive it instead.",
+    response_description="The payee was deleted",
+    responses={
+        404: PAYEE_NOT_FOUND,
+        409: documented_problem(
+            "A transaction uses the payee (`/problems/in-use/transaction`), so it"
+            " can't be deleted; archive it instead"
+        ),
+    },
+)
+def delete_payee(
+    payee_id: PayeeIdPath, payee_repo: PayeeRepositoryDep, user: CurrentUserDep
+) -> None:
+    """Delete one of the current user's payees, archived or not.
+
+    Args:
+        payee_id: The id of the payee to delete.
+        payee_repo: The repository the payee is stored in.
+        user: The current user.
+    """
+    payees.delete_payee(payee_repo, user.id, payee_id)
+
+
 @router.post(
     "/{payeeId}/archive",
     operation_id="archivePayee",

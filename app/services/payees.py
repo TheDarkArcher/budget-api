@@ -156,6 +156,23 @@ def unarchive_payee(
     return unarchived or get_payee(payee_repo, user_id, payee_id)
 
 
+def delete_payee(payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID) -> None:
+    """Delete one of a user's payees, archived or not.
+
+    Args:
+        payee_repo: The repository the payee is stored in.
+        user_id: The id of the user who owns the payee.
+        payee_id: The id of the payee to delete.
+
+    Raises:
+        NotFoundError: If the user has no payee with that id, which includes
+            another user's payee.
+        InUseError: If a transaction uses the payee.
+    """
+    if not payee_repo.delete(user_id, payee_id):
+        raise NotFoundError
+
+
 def name_conflict(
     payee_repo: PayeeRepository,
     user_id: UUID,
