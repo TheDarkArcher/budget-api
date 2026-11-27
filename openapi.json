@@ -60,6 +60,121 @@
       }
     },
     "/api/v1/payees": {
+      "get": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "List payees",
+        "description": "Return one page of the current user's payees, active ones by default, sorted by name.",
+        "operationId": "listPayees",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The page number, starting at 1.",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "The page number, starting at 1."
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "The most records a page can hold.",
+              "default": 25,
+              "title": "Pagesize"
+            },
+            "description": "The most records a page can hold."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Lists only records whose name contains this text, ignoring case. Surrounding whitespace is trimmed, and blank text is ignored. At most 100 characters after trimming, and no NUL character.",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Lists only records whose name contains this text, ignoring case. Surrounding whitespace is trimmed, and blank text is ignored. At most 100 characters after trimming, and no NUL character."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NameSort",
+              "description": "What to sort the list by.",
+              "default": "name"
+            },
+            "description": "What to sort the list by."
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder",
+              "description": "The direction to sort in. Records that sort equally are ordered by id, in the same direction.",
+              "default": "asc"
+            },
+            "description": "The direction to sort in. Records that sort equally are ordered by id, in the same direction."
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ArchivedFilter",
+              "description": "Whether to list active records (`false`), archived records (`true`) or both (`all`).",
+              "default": "false"
+            },
+            "description": "Whether to list active records (`false`), archived records (`true`) or both (`all`)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page of payees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeePage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "payees"
@@ -232,6 +347,16 @@
   },
   "components": {
     "schemas": {
+      "ArchivedFilter": {
+        "type": "string",
+        "enum": [
+          "false",
+          "true",
+          "all"
+        ],
+        "title": "ArchivedFilter",
+        "description": "Which records a list holds: active, archived or both."
+      },
       "CheckResult": {
         "properties": {
           "status": {
@@ -305,6 +430,14 @@
         "title": "LivenessResponse",
         "description": "Whether the app process is up and serving requests."
       },
+      "NameSort": {
+        "type": "string",
+        "enum": [
+          "name"
+        ],
+        "title": "NameSort",
+        "description": "What a list that only sorts by name can be sorted by."
+      },
       "PayeeNameConflictProblem": {
         "properties": {
           "type": {
@@ -351,6 +484,48 @@
         ],
         "title": "PayeeNameConflictProblem",
         "description": "A `/problems/name-conflict` problem for a payee's name."
+      },
+      "PayeePage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PayeeResponse"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "The records on this page."
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "The page number, starting at 1."
+          },
+          "pageSize": {
+            "type": "integer",
+            "title": "Pagesize",
+            "description": "The most records a page can hold."
+          },
+          "totalItems": {
+            "type": "integer",
+            "title": "Totalitems",
+            "description": "The number of records across all pages."
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages",
+            "description": "The number of pages, or 0 when there are no records."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "page",
+          "pageSize",
+          "totalItems",
+          "totalPages"
+        ],
+        "title": "PayeePage",
+        "description": "One page of a list of payees."
       },
       "PayeeReference": {
         "properties": {
@@ -545,6 +720,15 @@
         ],
         "title": "ReadinessResponse",
         "description": "Whether the app and each subsystem it depends on are ready."
+      },
+      "SortOrder": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ],
+        "title": "SortOrder",
+        "description": "Which way a list is sorted."
       },
       "UserResponse": {
         "properties": {

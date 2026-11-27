@@ -9,6 +9,7 @@ from pydantic import Field
 from app.repositories.payees import Payee
 from app.schemas.base import ApiModel
 from app.schemas.fields import Name, Reference
+from app.schemas.pagination import Page
 from app.schemas.problems import Problem
 
 
@@ -41,6 +42,10 @@ class PayeeResponse(ApiModel):
             The payee as the API returns it.
         """
         return cls(id=payee.id, name=payee.name, archived_at=payee.archived_at)
+
+
+class PayeePage(Page[PayeeResponse]):
+    """One page of a list of payees."""
 
 
 class PayeeReference(Reference):

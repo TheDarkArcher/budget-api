@@ -3,6 +3,8 @@
 from uuid import UUID
 
 from app.core.errors import NameConflictError, NotFoundError
+from app.core.list_options import NameSort
+from app.repositories.lists import LookupResourceCriteria, RecordPage
 from app.repositories.payees import Payee, PayeeRepository
 
 
@@ -64,3 +66,21 @@ def get_payee(payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID) -> Pay
     if payee is None:
         raise NotFoundError
     return payee
+
+
+def list_payees(
+    payee_repo: PayeeRepository,
+    user_id: UUID,
+    criteria: LookupResourceCriteria[NameSort],
+) -> RecordPage[Payee]:
+    """List one page of a user's payees.
+
+    Args:
+        payee_repo: The repository to list the payees from.
+        user_id: The id of the user who owns the payees.
+        criteria: Which of the payees to list, and which page of them.
+
+    Returns:
+        The payees on the page, and how many match in all.
+    """
+    return payee_repo.list(user_id, criteria)
