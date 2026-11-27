@@ -310,6 +310,88 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "payees"
+        ],
+        "summary": "Update a payee",
+        "description": "Update the entire payee, one of the current user's active ones. Archive or unarchive a payee with its own endpoints.",
+        "operationId": "updatePayee",
+        "parameters": [
+          {
+            "name": "payeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Payeeid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayeeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated payee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayeeResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current user is not authorised",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The current user has no payee with this id, or the id is malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The payee is archived (`/problems/archived`), or the current user already has another payee with this name, ignoring case, archived or not (`/problems/name-conflict`, with `existing` naming it)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/me": {
@@ -581,7 +663,7 @@
           "name"
         ],
         "title": "PayeeRequest",
-        "description": "A payee, as a request to create or replace one sends it."
+        "description": "A payee, as a request to create or update one sends it."
       },
       "PayeeResponse": {
         "properties": {

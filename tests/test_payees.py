@@ -6,8 +6,10 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from problems import (
+    ARCHIVED_PROBLEM,
     NOT_FOUND_PROBLEM,
     assert_problem,
+    body_validation_problem,
     parameter_validation_problem,
     without_error_details,
 )
@@ -27,6 +29,12 @@ def post_payee(
 ) -> httpx2.Response:
     headers = {} if key is None else {"Idempotency-Key": key}
     return client.post(PATH, json={"name": name}, headers=headers)
+
+
+def put_payee(
+    client: TestClient, payee_id: UUID | str, body: dict[str, str]
+) -> httpx2.Response:
+    return client.put(f"{PATH}/{payee_id}", json=body)
 
 
 def payee_id_named(connection: Connection, name: str) -> UUID:
@@ -264,3 +272,107 @@ def test_list_returns_validation_problem_for_a_sort_other_than_name(
     response = client.get(PATH, params={"sort": "itemCategory"})
     problem_body = assert_problem(response, 422)
     assert without_error_details(problem_body) == parameter_validation_problem("sort")
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_the_renamed_payee(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = put_payee(client, payee_id, {"name": "Corner Shop"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(payee_id),
+        "name": "Corner Shop",
+        "archivedAt": None,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+@pytest.mark.parametrize("name", ["Corner Store", "CORNER STORE"])
+def test_update_accepts_the_payees_own_name_in_any_case(
+    client: TestClient, connection: Connection, name: str
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = put_payee(client, payee_id, {"name": name})
+    assert response.status_code == 200
+    assert response.json() == {"id": str(payee_id), "name": name, "archivedAt": None}
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_validation_problem_for_archived_at_in_the_body(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    body = {"name": "Corner Shop", "archivedAt": "2026-11-01T00:00:00Z"}
+    response = put_payee(client, payee_id, body)
+    problem_body = assert_problem(response, 422)
+    assert without_error_details(problem_body) == body_validation_problem("/archivedAt")
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_name_conflict_problem_for_another_payees_name(
+    client: TestClient, connection: Connection
+) -> None:
+    supermarket_id = add_payee(connection, DUMMY_USER_ID, "Supermarket")
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = put_payee(client, payee_id, {"name": "supermarket"})
+    problem_body = assert_problem(response, 409)
+    assert problem_body == {
+        "type": "/problems/name-conflict",
+        "title": "Name already in use",
+        "status": 409,
+        "detail": "A payee named 'Supermarket' already exists.",
+        "existing": {
+            "id": str(supermarket_id),
+            "name": "Supermarket",
+            "archivedAt": None,
+        },
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_archived_problem_even_if_the_name_is_in_use(
+    client: TestClient, connection: Connection
+) -> None:
+    add_payee(connection, DUMMY_USER_ID, "Supermarket")
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
+    response = put_payee(client, payee_id, {"name": "Supermarket"})
+    problem_body = assert_problem(response, 409)
+    assert problem_body == ARCHIVED_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_validation_problem_even_if_the_payee_is_archived(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
+    response = put_payee(client, payee_id, {"name": " "})
+    problem_body = assert_problem(response, 422)
+    assert without_error_details(problem_body) == body_validation_problem("/name")
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_not_found_problem_for_another_users_payee(
+    client: TestClient, alice: World
+) -> None:
+    response = put_payee(client, alice.payee, {"name": "Corner Shop"})
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_update_returns_not_found_problem_for_a_malformed_id(
+    client: TestClient,
+) -> None:
+    response = put_payee(client, "not-an-id", {"name": "Corner Shop"})
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+def test_update_documents_its_conflict_problems(client: TestClient) -> None:
+    operation = client.get("/openapi.json").json()["paths"][f"{PATH}/{{payeeId}}"]
+    conflict = operation["put"]["responses"]["409"]
+    assert conflict["content"] == {
+        "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
+    }

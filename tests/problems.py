@@ -12,6 +12,13 @@ NOT_FOUND_PROBLEM = {
     "status": 404,
     "detail": "Not Found",
 }
+# The body of every 409 for changing an archived record, whatever the resource.
+ARCHIVED_PROBLEM = {
+    "type": "/problems/archived",
+    "title": "Record archived",
+    "status": 409,
+    "detail": "The record is archived; unarchive it before changing it.",
+}
 # The body of every validation problem, apart from its errors entries.
 VALIDATION_PROBLEM = {
     "type": "/problems/validation",
