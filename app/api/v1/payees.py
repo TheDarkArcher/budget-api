@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Path, Request, Response, status
+from fastapi import APIRouter, Path, Query, Request, Response, status
 
 from app.api.dependencies import (
     CurrentUserDep,
@@ -14,8 +14,10 @@ from app.api.idempotency import NewRecord
 from app.api.openapi import documented_problem
 from app.api.problems import NAME_CONFLICT, ProblemError
 from app.api.routing import SingleValueRoute
+from app.schemas.pagination import ArchivableLookupResourceParameters
 from app.schemas.payees import (
     PayeeNameConflictProblem,
+    PayeePage,
     PayeeReference,
     PayeeRequest,
     PayeeResponse,
@@ -29,6 +31,34 @@ PayeeIdPath = Annotated[UUID, Path(alias="payeeId")]
 PAYEE_NOT_FOUND = documented_problem(
     "The current user has no payee with this id, or the id is malformed"
 )
+
+
+@router.get(
+    "",
+    operation_id="listPayees",
+    summary="List payees",
+    description="Return one page of the current user's payees, active ones by"
+    " default, sorted by name.",
+    response_description="The page of payees",
+)
+def list_payees(
+    parameters: Annotated[ArchivableLookupResourceParameters, Query()],
+    payee_repo: PayeeRepositoryDep,
+    user: CurrentUserDep,
+) -> PayeePage:
+    """Return one page of the current user's payees.
+
+    Args:
+        parameters: Which payees to list, and which page of them.
+        payee_repo: The repository to list the payees from.
+        user: The current user.
+
+    Returns:
+        The page of payees.
+    """
+    page = payees.list_payees(payee_repo, user.id, parameters.criteria())
+    records = [PayeeResponse.from_payee(payee) for payee in page.records]
+    return PayeePage.build(records, parameters, page.total_items)
 
 
 @router.post(

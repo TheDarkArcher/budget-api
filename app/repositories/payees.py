@@ -7,7 +7,10 @@ from uuid import UUID
 
 from sqlalchemy import Connection, Row, tstring
 
+from app.core.list_options import NameSort
+from app.repositories.lists import LookupResourceCriteria, RecordPage
 from app.repositories.sql_errors import translate_sql_constraint_errors
+from app.repositories.sql_lists import SQL_NAME_SORTS, SQLLookupResourceLists
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,20 @@ class PayeeRepository(ABC):
 
         Returns:
             The payee, or ``None`` if the user has no payee with that id.
+        """
+
+    @abstractmethod
+    def list(
+        self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
+    ) -> RecordPage[Payee]:
+        """List one page of a user's payees.
+
+        Args:
+            user_id: The id of the user who owns the payees.
+            criteria: Which of the payees to list, and which page of them.
+
+        Returns:
+            The payees on the page, and how many match in all.
         """
 
     @abstractmethod
@@ -143,6 +160,28 @@ class SQLPayeeRepository(PayeeRepository):
             """)
         ).first()
         return None if row is None else self._payee(row)
+
+    def list(
+        self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
+    ) -> RecordPage[Payee]:
+        """List one page of a user's payees.
+
+        Args:
+            user_id: The id of the user who owns the payees.
+            criteria: Which of the payees to list, and which page of them.
+
+        Returns:
+            The payees on the page, and how many match in all.
+        """
+        payees = tstring(t"""
+            SELECT id, name, archived_at
+            FROM payees
+            WHERE user_id = {user_id}
+        """)
+        page = SQLLookupResourceLists(self._connection, SQL_NAME_SORTS).fetch_page(
+            payees, criteria
+        )
+        return RecordPage([self._payee(row) for row in page.records], page.total_items)
 
     def _payee(self, row: Row[tuple[UUID, str, datetime | None]]) -> Payee:
         """Build a payee from a row of the ``payees`` table.

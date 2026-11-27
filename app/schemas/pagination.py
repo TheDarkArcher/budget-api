@@ -1,12 +1,14 @@
 """Schemas for paged lists and their query parameters."""
 
 import math
+from dataclasses import replace
 from enum import StrEnum
 from typing import Annotated, Self, cast
 
 from pydantic import AfterValidator, ConfigDict, Field, StringConstraints
 
 from app.core.list_options import ArchivedFilter, NameSort, SortOrder
+from app.repositories.lists import LookupResourceCriteria
 from app.schemas.base import ApiModel
 from app.schemas.fields import reject_nul
 
@@ -52,6 +54,22 @@ class LookupResourceParameters[Sort: StrEnum = NameSort](PageParameters):
         " ordered by id, in the same direction.",
     )
 
+    def criteria(self) -> LookupResourceCriteria[Sort]:
+        """Build the criteria for the records the request asked for.
+
+        Returns:
+            The criteria, listing archived and active records alike, as a
+            resource that takes these parameters is never archived.
+        """
+        return LookupResourceCriteria(
+            q=self.q,
+            archived=ArchivedFilter.ALL,
+            sort=self.sort,
+            order=self.order,
+            page=self.page,
+            page_size=self.page_size,
+        )
+
 
 class ArchivableLookupResourceParameters[Sort: StrEnum = NameSort](
     LookupResourceParameters[Sort]
@@ -63,6 +81,14 @@ class ArchivableLookupResourceParameters[Sort: StrEnum = NameSort](
         description="Whether to list active records (`false`), archived records"
         " (`true`) or both (`all`).",
     )
+
+    def criteria(self) -> LookupResourceCriteria[Sort]:
+        """Build the criteria for the records the request asked for.
+
+        Returns:
+            The criteria, listing the records ``archived`` chooses.
+        """
+        return replace(super().criteria(), archived=self.archived)
 
 
 # Subclass this per resource, such as `class PayeePage(Page[Payee])`, so the

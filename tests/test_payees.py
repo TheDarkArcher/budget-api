@@ -5,7 +5,7 @@ from uuid import UUID
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from problems import NOT_FOUND_PROBLEM, assert_problem
+from problems import NOT_FOUND_PROBLEM, assert_problem, without_error_details
 from records import World, add_payee
 from responses import response_parts, with_parsed_archive_time
 from sql import count, one
@@ -185,3 +185,83 @@ def test_get_returns_not_found_problem_for_a_malformed_id(
     response = client.get(f"{PATH}/not-an-id")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_list_returns_the_users_active_payees_by_name(
+    client: TestClient, connection: Connection, alice: World
+) -> None:
+    add_payee(connection, alice.user, "Corner Store")
+    supermarket = add_payee(connection, DUMMY_USER_ID, "Supermarket")
+    corner_store = add_payee(connection, DUMMY_USER_ID, "corner store")
+    add_payee(connection, DUMMY_USER_ID, "Bakery", archived=True)
+    response = client.get(PATH)
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [
+            {"id": str(corner_store), "name": "corner store", "archivedAt": None},
+            {"id": str(supermarket), "name": "Supermarket", "archivedAt": None},
+        ],
+        "page": 1,
+        "pageSize": 25,
+        "totalItems": 2,
+        "totalPages": 1,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_list_returns_only_archived_payees_when_asked_for(
+    client: TestClient, connection: Connection
+) -> None:
+    add_payee(connection, DUMMY_USER_ID, "Supermarket")
+    bakery = add_payee(connection, DUMMY_USER_ID, "Bakery", archived=True)
+    archived_at = one(
+        connection,
+        "SELECT archived_at FROM payees WHERE id = :payee_id",
+        payee_id=bakery,
+    )
+    response = client.get(PATH, params={"archived": "true"})
+    assert response.status_code == 200
+    body = response.json()
+    data = [with_parsed_archive_time(payee) for payee in body["data"]]
+    assert {**body, "data": data} == {
+        "data": [{"id": str(bakery), "name": "Bakery", "archivedAt": archived_at}],
+        "page": 1,
+        "pageSize": 25,
+        "totalItems": 1,
+        "totalPages": 1,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_list_returns_the_page_of_matching_payees_asked_for(
+    client: TestClient, connection: Connection
+) -> None:
+    add_payee(connection, DUMMY_USER_ID, "Bakery")
+    add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    add_payee(connection, DUMMY_USER_ID, "Hardware Store")
+    farm_store = add_payee(connection, DUMMY_USER_ID, "Farm Store")
+    response = client.get(PATH, params={"q": "store", "page": 2, "pageSize": 1})
+    assert response.status_code == 200
+    assert response.json() == {
+        "data": [{"id": str(farm_store), "name": "Farm Store", "archivedAt": None}],
+        "page": 2,
+        "pageSize": 1,
+        "totalItems": 3,
+        "totalPages": 3,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_list_returns_validation_problem_for_a_sort_other_than_name(
+    client: TestClient,
+) -> None:
+    response = client.get(PATH, params={"sort": "itemCategory"})
+    problem_body = assert_problem(response, 422)
+    assert without_error_details(problem_body) == {
+        "type": "/problems/validation",
+        "title": "Validation failed",
+        "status": 422,
+        "detail": "The request isn't valid; see errors for each problem.",
+        "errors": [{"parameter": "sort"}],
+    }
