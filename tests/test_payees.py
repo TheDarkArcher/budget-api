@@ -1,5 +1,6 @@
 """Tests for the ``/api/v1/payees`` endpoints."""
 
+from datetime import datetime
 from uuid import UUID
 
 import httpx2
@@ -35,6 +36,15 @@ def put_payee(
     client: TestClient, payee_id: UUID | str, body: dict[str, str]
 ) -> httpx2.Response:
     return client.put(f"{PATH}/{payee_id}", json=body)
+
+
+def archive_time(connection: Connection, payee_id: UUID) -> datetime:
+    archived_at: datetime = one(
+        connection,
+        "SELECT archived_at FROM payees WHERE id = :payee_id",
+        payee_id=payee_id,
+    )
+    return archived_at
 
 
 def payee_id_named(connection: Connection, name: str) -> UUID:
@@ -376,3 +386,81 @@ def test_update_documents_its_conflict_problems(client: TestClient) -> None:
     assert conflict["content"] == {
         "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
     }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_archive_returns_the_archived_payee(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = client.post(f"{PATH}/{payee_id}/archive")
+    assert response.status_code == 200
+    assert with_parsed_archive_time(response.json()) == {
+        "id": str(payee_id),
+        "name": "Corner Store",
+        "archivedAt": archive_time(connection, payee_id),
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_archive_returns_an_archived_payee_unchanged(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
+    archived_at = archive_time(connection, payee_id)
+    response = client.post(f"{PATH}/{payee_id}/archive")
+    assert response.status_code == 200
+    assert with_parsed_archive_time(response.json()) == {
+        "id": str(payee_id),
+        "name": "Corner Store",
+        "archivedAt": archived_at,
+    }
+    assert archive_time(connection, payee_id) == archived_at
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_unarchive_returns_the_active_payee(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
+    response = client.post(f"{PATH}/{payee_id}/unarchive")
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(payee_id),
+        "name": "Corner Store",
+        "archivedAt": None,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_unarchive_returns_an_active_payee_unchanged(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = client.post(f"{PATH}/{payee_id}/unarchive")
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(payee_id),
+        "name": "Corner Store",
+        "archivedAt": None,
+    }
+
+
+@pytest.mark.usefixtures("dummy_user")
+@pytest.mark.parametrize("action", ["archive", "unarchive"])
+def test_archive_actions_return_not_found_problem_for_another_users_payee(
+    client: TestClient, alice: World, action: str
+) -> None:
+    response = client.post(f"{PATH}/{alice.payee}/{action}")
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+@pytest.mark.parametrize("action", ["archive", "unarchive"])
+def test_archive_actions_return_not_found_problem_for_a_malformed_id(
+    client: TestClient, action: str
+) -> None:
+    response = client.post(f"{PATH}/not-an-id/{action}")
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM

@@ -114,6 +114,48 @@ def update_payee(
     return updated
 
 
+def archive_payee(payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID) -> Payee:
+    """Archive one of a user's payees, leaving an archived one unchanged.
+
+    Args:
+        payee_repo: The repository the payee is stored in.
+        user_id: The id of the user who owns the payee.
+        payee_id: The id of the payee to archive.
+
+    Returns:
+        The archived payee.
+
+    Raises:
+        NotFoundError: If the user has no payee with that id, which includes
+            another user's payee.
+    """
+    archived = payee_repo.archive(user_id, payee_id)
+    # The repository archives only an active payee, so any other is looked up.
+    return archived or get_payee(payee_repo, user_id, payee_id)
+
+
+def unarchive_payee(
+    payee_repo: PayeeRepository, user_id: UUID, payee_id: UUID
+) -> Payee:
+    """Unarchive one of a user's payees, leaving an active one unchanged.
+
+    Args:
+        payee_repo: The repository the payee is stored in.
+        user_id: The id of the user who owns the payee.
+        payee_id: The id of the payee to unarchive.
+
+    Returns:
+        The active payee.
+
+    Raises:
+        NotFoundError: If the user has no payee with that id, which includes
+            another user's payee.
+    """
+    unarchived = payee_repo.unarchive(user_id, payee_id)
+    # The repository unarchives only an archived payee, so any other is looked up.
+    return unarchived or get_payee(payee_repo, user_id, payee_id)
+
+
 def name_conflict(
     payee_repo: PayeeRepository,
     user_id: UUID,

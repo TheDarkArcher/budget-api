@@ -188,6 +188,59 @@ def update_payee(
     return PayeeResponse.from_payee(payee)
 
 
+@router.post(
+    "/{payeeId}/archive",
+    operation_id="archivePayee",
+    summary="Archive a payee",
+    description="Archive one of the current user's payees, which hides it from"
+    " lists by default. Archiving an archived payee changes nothing, so its"
+    " `archivedAt` keeps its first value and the request is safe to repeat.",
+    response_description="The archived payee",
+    responses={404: PAYEE_NOT_FOUND},
+)
+def archive_payee(
+    payee_id: PayeeIdPath, payee_repo: PayeeRepositoryDep, user: CurrentUserDep
+) -> PayeeResponse:
+    """Archive one of the current user's payees, leaving an archived one unchanged.
+
+    Args:
+        payee_id: The id of the payee to archive.
+        payee_repo: The repository the payee is stored in.
+        user: The current user.
+
+    Returns:
+        The archived payee.
+    """
+    return PayeeResponse.from_payee(payees.archive_payee(payee_repo, user.id, payee_id))
+
+
+@router.post(
+    "/{payeeId}/unarchive",
+    operation_id="unarchivePayee",
+    summary="Unarchive a payee",
+    description="Unarchive one of the current user's payees. Unarchiving an"
+    " active payee changes nothing, so the request is safe to repeat.",
+    response_description="The active payee",
+    responses={404: PAYEE_NOT_FOUND},
+)
+def unarchive_payee(
+    payee_id: PayeeIdPath, payee_repo: PayeeRepositoryDep, user: CurrentUserDep
+) -> PayeeResponse:
+    """Unarchive one of the current user's payees, leaving an active one unchanged.
+
+    Args:
+        payee_id: The id of the payee to unarchive.
+        payee_repo: The repository the payee is stored in.
+        user: The current user.
+
+    Returns:
+        The active payee.
+    """
+    return PayeeResponse.from_payee(
+        payees.unarchive_payee(payee_repo, user.id, payee_id)
+    )
+
+
 def name_conflict_problem(error: payees.PayeeNameConflictError) -> ProblemError:
     """Build the name conflict problem for a payee's name.
 

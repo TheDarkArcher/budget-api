@@ -1,6 +1,7 @@
 """Fake data-access repositories that record what is written, for service tests."""
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.core.errors import ArchivedError, NameConflictError
@@ -31,13 +32,15 @@ class FakePayeeRepository(PayeeRepository):
     """Keeps payees in memory, by id, with the id of the user who owns each.
 
     Refuses a name the user already has, ignoring case, and any change to an
-    archived payee, as the database does. Lists every one of the user's payees
-    on one page, recording the criteria it was given rather than applying them.
+    archived payee, as the database does. Archives payees at ``now``. Lists
+    every one of the user's payees on one page, recording the criteria it was
+    given rather than applying them.
     """
 
     def __init__(self) -> None:
         self.payees: dict[UUID, tuple[UUID, Payee]] = {}
         self.list_criteria: LookupResourceCriteria[NameSort] | None = None
+        self.now = datetime(2026, 11, 2, tzinfo=UTC)
 
     def create(self, user_id: UUID, name: str) -> Payee:
         if self.get_by_name(user_id, name) is not None:
@@ -62,6 +65,22 @@ class FakePayeeRepository(PayeeRepository):
         updated = replace(payee, name=name)
         self.payees[payee_id] = (user_id, updated)
         return updated
+
+    def archive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        payee = self.get(user_id, payee_id)
+        if payee is None or payee.archived_at is not None:
+            return None
+        archived = replace(payee, archived_at=self.now)
+        self.payees[payee_id] = (user_id, archived)
+        return archived
+
+    def unarchive(self, user_id: UUID, payee_id: UUID) -> Payee | None:
+        payee = self.get(user_id, payee_id)
+        if payee is None or payee.archived_at is None:
+            return None
+        unarchived = replace(payee, archived_at=None)
+        self.payees[payee_id] = (user_id, unarchived)
+        return unarchived
 
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
