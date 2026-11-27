@@ -575,6 +575,7 @@
             "description": "The payee's name. Surrounding whitespace is trimmed, and it must then be 1 to 100 characters long, with no NUL character."
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name"

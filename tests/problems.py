@@ -1,4 +1,4 @@
-"""Assertions shared by tests of problem details (RFC 9457) responses."""
+"""Checks and expected bodies for tests of problem details (RFC 9457)."""
 
 from typing import Any
 
@@ -11,6 +11,13 @@ NOT_FOUND_PROBLEM = {
     "title": "Not Found",
     "status": 404,
     "detail": "Not Found",
+}
+# The body of every validation problem, apart from its errors entries.
+VALIDATION_PROBLEM = {
+    "type": "/problems/validation",
+    "title": "Validation failed",
+    "status": 422,
+    "detail": "The request isn't valid; see errors for each problem.",
 }
 
 
@@ -32,3 +39,19 @@ def without_error_details(problem_body: dict[str, Any]) -> dict[str, Any]:
         assert isinstance(error.get("detail"), str)
         errors.append({key: value for key, value in error.items() if key != "detail"})
     return {**problem_body, "errors": errors}
+
+
+def body_validation_problem(*pointers: str) -> dict[str, Any]:
+    """The validation problem for errors at these body pointers, details removed."""
+    return {
+        **VALIDATION_PROBLEM,
+        "errors": [{"pointer": pointer} for pointer in pointers],
+    }
+
+
+def parameter_validation_problem(*parameters: str) -> dict[str, Any]:
+    """The validation problem for errors in these parameters, details removed."""
+    return {
+        **VALIDATION_PROBLEM,
+        "errors": [{"parameter": parameter} for parameter in parameters],
+    }
