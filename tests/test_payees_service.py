@@ -15,6 +15,7 @@ from app.services.payees import (
     PayeeNameConflictError,
     archive_payee,
     create_payee,
+    delete_payee,
     get_payee,
     list_payees,
     unarchive_payee,
@@ -177,3 +178,20 @@ def test_unarchive_payee_raises_not_found_for_another_users_payee(
     )
     with pytest.raises(NotFoundError):
         unarchive_payee(fake_payee_repo, USER_ID, payee.id)
+
+
+def test_delete_payee_removes_the_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = fake_payee_repo.create(USER_ID, "Corner Store")
+    delete_payee(fake_payee_repo, USER_ID, payee.id)
+    assert fake_payee_repo.payees == {}
+
+
+def test_delete_payee_raises_not_found_for_another_users_payee(
+    fake_payee_repo: FakePayeeRepository,
+) -> None:
+    payee = fake_payee_repo.create(OTHER_USER_ID, "Corner Store")
+    with pytest.raises(NotFoundError):
+        delete_payee(fake_payee_repo, USER_ID, payee.id)
+    assert fake_payee_repo.payees == {payee.id: (OTHER_USER_ID, payee)}

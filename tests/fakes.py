@@ -82,6 +82,12 @@ class FakePayeeRepository(PayeeRepository):
         self.payees[payee_id] = (user_id, unarchived)
         return unarchived
 
+    def delete(self, user_id: UUID, payee_id: UUID) -> bool:
+        if self.get(user_id, payee_id) is None:
+            return False
+        del self.payees[payee_id]
+        return True
+
     def list(
         self, user_id: UUID, criteria: LookupResourceCriteria[NameSort]
     ) -> RecordPage[Payee]:

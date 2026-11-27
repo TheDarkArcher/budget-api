@@ -14,7 +14,7 @@ from problems import (
     parameter_validation_problem,
     without_error_details,
 )
-from records import World, add_payee
+from records import World, add_payee, add_transaction, add_transaction_category
 from responses import response_parts, with_parsed_archive_time
 from sql import count, one
 from sqlalchemy import Connection
@@ -57,11 +57,11 @@ def payee_id_named(connection: Connection, name: str) -> UUID:
     return payee_id
 
 
-def payees_count(connection: Connection) -> int:
+def payees_count(connection: Connection, user: UUID = DUMMY_USER_ID) -> int:
     return count(
         connection,
         "SELECT count(*) FROM payees WHERE user_id = :user",
-        user=DUMMY_USER_ID,
+        user=user,
     )
 
 
@@ -464,3 +464,58 @@ def test_archive_actions_return_not_found_problem_for_a_malformed_id(
     response = client.post(f"{PATH}/not-an-id/{action}")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_delete_removes_the_payee(client: TestClient, connection: Connection) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    response = client.delete(f"{PATH}/{payee_id}")
+    assert response.status_code == 204
+    assert response.content == b""
+    assert payees_count(connection) == 0
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_delete_returns_in_use_problem_for_a_payee_a_transaction_uses(
+    client: TestClient, connection: Connection
+) -> None:
+    payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
+    category_id = add_transaction_category(connection, DUMMY_USER_ID, "Groceries")
+    add_transaction(connection, DUMMY_USER_ID, category_id, payee_id)
+    response = client.delete(f"{PATH}/{payee_id}")
+    problem_body = assert_problem(response, 409)
+    assert problem_body == {
+        "type": "/problems/in-use/transaction",
+        "title": "In use by a transaction",
+        "status": 409,
+        "detail": "A transaction uses the record, so it can't be deleted;"
+        " archive it instead.",
+    }
+    assert payees_count(connection) == 1
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_delete_returns_not_found_problem_for_another_users_payee(
+    client: TestClient, connection: Connection, alice: World
+) -> None:
+    response = client.delete(f"{PATH}/{alice.payee}")
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+    assert payees_count(connection, alice.user) == 1
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_delete_returns_not_found_problem_for_a_malformed_id(
+    client: TestClient,
+) -> None:
+    response = client.delete(f"{PATH}/not-an-id")
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+def test_delete_documents_its_in_use_problem(client: TestClient) -> None:
+    operation = client.get("/openapi.json").json()["paths"][f"{PATH}/{{payeeId}}"]
+    conflict = operation["delete"]["responses"]["409"]
+    assert conflict["content"] == {
+        "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
+    }
