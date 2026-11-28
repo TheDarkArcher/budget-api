@@ -28,7 +28,7 @@ from records import (
     make_world,
     tag_item,
 )
-from sql import count, one, run
+from sql import count, one, one_row, run
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError
 
@@ -187,6 +187,24 @@ def delete_world(connection: Connection, world: World) -> None:
     run(connection, "DELETE FROM users WHERE id = :user", user=world.user)
 
 
+def item_category_links_count(connection: Connection, item_category: UUID) -> int:
+    return count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE item_category_id = :item_category",
+        item_category=item_category,
+    )
+
+
+def transaction_category_links_count(connection: Connection, category: UUID) -> int:
+    return count(
+        connection,
+        "SELECT count(*) FROM transaction_category_item_categories"
+        " WHERE transaction_category_id = :category",
+        category=category,
+    )
+
+
 def add_link(engine: Engine, category: UUID, item_category: UUID) -> None:
     with engine.begin() as connection:
         run(connection, INSERT_LINK, category=category, item_category=item_category)
@@ -230,10 +248,11 @@ def bob(connection: Connection) -> World:
 def test_ids_are_uuid_v7_and_timestamps_default(
     connection: Connection, alice: World
 ) -> None:
-    row = connection.execute(
-        text("SELECT id, created_at, updated_at FROM users WHERE id = :id"),
-        {"id": alice.user},
-    ).one()
+    row = one_row(
+        connection,
+        "SELECT id, created_at, updated_at FROM users WHERE id = :id",
+        id=alice.user,
+    )
     assert row.id.version == 7
     assert row.created_at == row.updated_at
 
@@ -666,12 +685,7 @@ def test_deleting_an_item_category_removes_its_links(
     item_category = add_item_category(connection, alice.user, "Household")
     link(connection, alice.category, item_category)
     run(connection, "DELETE FROM item_categories WHERE id = :id", id=item_category)
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE item_category_id = :id",
-        id=item_category,
-    )
+    links = item_category_links_count(connection, item_category)
     assert links == 0
 
 
@@ -936,12 +950,7 @@ def test_deleting_an_archived_transaction_category_removes_its_links(
         "DELETE FROM transaction_categories WHERE id = :id",
         id=alice.category,
     )
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE item_category_id = :id",
-        id=alice.item_category,
-    )
+    links = item_category_links_count(connection, alice.item_category)
     assert links == 0
 
 
@@ -952,12 +961,7 @@ def test_deleting_an_item_category_removes_links_to_archived_categories(
     link(connection, alice.category, item_category)
     run(connection, ARCHIVE_TRANSACTION_CATEGORY, category=alice.category)
     run(connection, "DELETE FROM item_categories WHERE id = :id", id=item_category)
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE item_category_id = :id",
-        id=item_category,
-    )
+    links = item_category_links_count(connection, item_category)
     assert links == 0
 
 
@@ -971,12 +975,7 @@ def test_cannot_delete_an_active_transaction_category_with_an_active_link(
         constraint="transaction_categories_item_category_link",
         id=alice.category,
     )
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE transaction_category_id = :id",
-        id=alice.category,
-    )
+    links = transaction_category_links_count(connection, alice.category)
     assert links == 1
 
 
@@ -1005,12 +1004,7 @@ def test_a_transaction_category_without_an_applying_link_deletes_with_its_links(
         "DELETE FROM transaction_categories WHERE id = :id",
         id=alice.category,
     )
-    links = count(
-        connection,
-        "SELECT count(*) FROM transaction_category_item_categories"
-        " WHERE transaction_category_id = :id",
-        id=alice.category,
-    )
+    links = transaction_category_links_count(connection, alice.category)
     assert links == 0
 
 
@@ -1098,10 +1092,11 @@ def test_view_derives_total_and_line_count(
     connection: Connection, alice: World
 ) -> None:
     transaction = add_world_transaction(connection, alice, "3.50", "2.70")
-    row = connection.execute(
-        text("SELECT total, line_count FROM transaction_totals WHERE id = :id"),
-        {"id": transaction},
-    ).one()
+    row = one_row(
+        connection,
+        "SELECT total, line_count FROM transaction_totals WHERE id = :id",
+        id=transaction,
+    )
     assert row.total == Decimal("6.20")
     assert row.line_count == 2
 
@@ -1110,10 +1105,11 @@ def test_view_shows_transactions_without_lines(
     connection: Connection, alice: World
 ) -> None:
     transaction = add_world_transaction(connection, alice)
-    row = connection.execute(
-        text("SELECT total, line_count FROM transaction_totals WHERE id = :id"),
-        {"id": transaction},
-    ).one()
+    row = one_row(
+        connection,
+        "SELECT total, line_count FROM transaction_totals WHERE id = :id",
+        id=transaction,
+    )
     assert row.total == 0
     assert row.line_count == 0
 
@@ -1188,10 +1184,11 @@ def test_updates_set_updated_at(connection: Connection, alice: World) -> None:
         past=past,
         id=alice.payee,
     )
-    row = connection.execute(
-        text("SELECT created_at, updated_at, now() AS now FROM payees WHERE id = :id"),
-        {"id": alice.payee},
-    ).one()
+    row = one_row(
+        connection,
+        "SELECT created_at, updated_at, now() AS now FROM payees WHERE id = :id",
+        id=alice.payee,
+    )
     assert row.created_at == past
     assert row.updated_at == row.now
 

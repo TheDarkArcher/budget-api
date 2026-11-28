@@ -59,6 +59,14 @@ def assert_problem(response: Response, status: int) -> dict[str, Any]:
     return body
 
 
+def assert_exception_logged(caplog: pytest.LogCaptureFixture, text: str) -> None:
+    """Check a log record carries an exception whose message contains ``text``."""
+    assert any(
+        record.exc_info is not None and text in str(record.exc_info[1])
+        for record in caplog.records
+    )
+
+
 def without_error_details(problem_body: dict[str, Any]) -> dict[str, Any]:
     """Check every ``errors`` entry has a detail and return the body without them.
 
@@ -87,9 +95,17 @@ def parameter_validation_problem(*parameters: str) -> dict[str, Any]:
     }
 
 
-def assert_exception_logged(caplog: pytest.LogCaptureFixture, text: str) -> None:
-    """Check a log record carries an exception whose message contains ``text``."""
-    assert any(
-        record.exc_info is not None and text in str(record.exc_info[1])
-        for record in caplog.records
-    )
+def expected_name_conflict_problem(
+    resource: str, existing: dict[str, Any]
+) -> dict[str, Any]:
+    """The name conflict a resource returns, naming the record that has the name.
+
+    ``existing`` is that record's nested reference, as the response carries it.
+    """
+    return {
+        "type": "/problems/name-conflict",
+        "title": "Name already in use",
+        "status": 409,
+        "detail": f"A {resource} named '{existing['name']}' already exists.",
+        "existing": existing,
+    }
