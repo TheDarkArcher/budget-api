@@ -1,6 +1,7 @@
 """Tests for the ``/api/v1/payees`` endpoints."""
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 import httpx2
@@ -12,6 +13,7 @@ from problems import (
     NOT_FOUND_PROBLEM,
     assert_problem,
     body_validation_problem,
+    expected_name_conflict_problem,
     parameter_validation_problem,
     without_error_details,
 )
@@ -58,6 +60,12 @@ def payee_id_named(connection: Connection, name: str) -> UUID:
     return payee_id
 
 
+def expected_payee(
+    payee_id: UUID, name: str, archived_at: datetime | None = None
+) -> dict[str, Any]:
+    return {"id": str(payee_id), "name": name, "archivedAt": archived_at}
+
+
 def payees_count(connection: Connection, user: UUID = DUMMY_USER_ID) -> int:
     return count(
         connection,
@@ -74,11 +82,7 @@ def test_create_returns_the_new_payee_with_its_location(
     payee_id = payee_id_named(connection, "Corner Store")
     assert response.status_code == 201
     assert response.headers["location"] == f"{PATH}/{payee_id}"
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Store")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -98,13 +102,9 @@ def test_create_returns_name_conflict_problem_for_a_name_in_use_ignoring_case(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = post_payee(client, "CORNER STORE")
     problem_body = assert_problem(response, 409)
-    assert problem_body == {
-        "type": "/problems/name-conflict",
-        "title": "Name already in use",
-        "status": 409,
-        "detail": "A payee named 'Corner Store' already exists.",
-        "existing": {"id": str(payee_id), "name": "Corner Store", "archivedAt": None},
-    }
+    assert problem_body == expected_name_conflict_problem(
+        "payee", expected_payee(payee_id, "Corner Store")
+    )
     assert payees_count(connection) == 1
 
 
@@ -117,17 +117,9 @@ def test_create_returns_name_conflict_problem_for_an_archived_payees_name(
     response = post_payee(client, "Corner Store")
     problem_body = assert_problem(response, 409)
     existing = with_parsed_archive_time(problem_body["existing"])
-    assert {**problem_body, "existing": existing} == {
-        "type": "/problems/name-conflict",
-        "title": "Name already in use",
-        "status": 409,
-        "detail": "A payee named 'Corner Store' already exists.",
-        "existing": {
-            "id": str(payee_id),
-            "name": "Corner Store",
-            "archivedAt": archived_at,
-        },
-    }
+    assert {**problem_body, "existing": existing} == expected_name_conflict_problem(
+        "payee", expected_payee(payee_id, "Corner Store", archived_at)
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -138,11 +130,7 @@ def test_create_accepts_a_name_another_user_has(
     response = post_payee(client, "Corner Store")
     payee_id = payee_id_named(connection, "Corner Store")
     assert response.status_code == 201
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Store")
 
 
 def test_create_documents_its_name_conflict_problem(client: TestClient) -> None:
@@ -163,11 +151,7 @@ def test_get_returns_the_payee(client: TestClient, connection: Connection) -> No
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = client.get(f"{PATH}/{payee_id}")
     assert response.status_code == 200
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Store")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -178,11 +162,9 @@ def test_get_returns_an_archived_payee_with_its_archive_time(
     archived_at = archive_time(connection, payee_id)
     response = client.get(f"{PATH}/{payee_id}")
     assert response.status_code == 200
-    assert with_parsed_archive_time(response.json()) == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": archived_at,
-    }
+    assert with_parsed_archive_time(response.json()) == expected_payee(
+        payee_id, "Corner Store", archived_at
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -215,8 +197,8 @@ def test_list_returns_the_users_active_payees_by_name(
     assert response.status_code == 200
     assert response.json() == {
         "data": [
-            {"id": str(corner_store), "name": "corner store", "archivedAt": None},
-            {"id": str(supermarket), "name": "Supermarket", "archivedAt": None},
+            expected_payee(corner_store, "corner store"),
+            expected_payee(supermarket, "Supermarket"),
         ],
         "page": 1,
         "pageSize": 25,
@@ -237,7 +219,7 @@ def test_list_returns_only_archived_payees_when_asked_for(
     body = response.json()
     data = [with_parsed_archive_time(payee) for payee in body["data"]]
     assert {**body, "data": data} == {
-        "data": [{"id": str(bakery), "name": "Bakery", "archivedAt": archived_at}],
+        "data": [expected_payee(bakery, "Bakery", archived_at)],
         "page": 1,
         "pageSize": 25,
         "totalItems": 1,
@@ -256,7 +238,7 @@ def test_list_returns_the_page_of_matching_payees_asked_for(
     response = client.get(PATH, params={"q": "store", "page": 2, "pageSize": 1})
     assert response.status_code == 200
     assert response.json() == {
-        "data": [{"id": str(farm_store), "name": "Farm Store", "archivedAt": None}],
+        "data": [expected_payee(farm_store, "Farm Store")],
         "page": 2,
         "pageSize": 1,
         "totalItems": 3,
@@ -280,11 +262,7 @@ def test_update_returns_the_renamed_payee(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = put_payee(client, payee_id, {"name": "Corner Shop"})
     assert response.status_code == 200
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Shop",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Shop")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -295,7 +273,7 @@ def test_update_accepts_the_payees_own_name_in_any_case(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = put_payee(client, payee_id, {"name": name})
     assert response.status_code == 200
-    assert response.json() == {"id": str(payee_id), "name": name, "archivedAt": None}
+    assert response.json() == expected_payee(payee_id, name)
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -317,17 +295,9 @@ def test_update_returns_name_conflict_problem_for_another_payees_name(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = put_payee(client, payee_id, {"name": "supermarket"})
     problem_body = assert_problem(response, 409)
-    assert problem_body == {
-        "type": "/problems/name-conflict",
-        "title": "Name already in use",
-        "status": 409,
-        "detail": "A payee named 'Supermarket' already exists.",
-        "existing": {
-            "id": str(supermarket_id),
-            "name": "Supermarket",
-            "archivedAt": None,
-        },
-    }
+    assert problem_body == expected_name_conflict_problem(
+        "payee", expected_payee(supermarket_id, "Supermarket")
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -384,11 +354,9 @@ def test_archive_returns_the_archived_payee(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = client.post(f"{PATH}/{payee_id}/archive")
     assert response.status_code == 200
-    assert with_parsed_archive_time(response.json()) == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": archive_time(connection, payee_id),
-    }
+    assert with_parsed_archive_time(response.json()) == expected_payee(
+        payee_id, "Corner Store", archive_time(connection, payee_id)
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -399,11 +367,9 @@ def test_archive_returns_an_archived_payee_unchanged(
     archived_at = archive_time(connection, payee_id)
     response = client.post(f"{PATH}/{payee_id}/archive")
     assert response.status_code == 200
-    assert with_parsed_archive_time(response.json()) == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": archived_at,
-    }
+    assert with_parsed_archive_time(response.json()) == expected_payee(
+        payee_id, "Corner Store", archived_at
+    )
     assert archive_time(connection, payee_id) == archived_at
 
 
@@ -414,11 +380,7 @@ def test_unarchive_returns_the_active_payee(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
     response = client.post(f"{PATH}/{payee_id}/unarchive")
     assert response.status_code == 200
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Store")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -428,11 +390,7 @@ def test_unarchive_returns_an_active_payee_unchanged(
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
     response = client.post(f"{PATH}/{payee_id}/unarchive")
     assert response.status_code == 200
-    assert response.json() == {
-        "id": str(payee_id),
-        "name": "Corner Store",
-        "archivedAt": None,
-    }
+    assert response.json() == expected_payee(payee_id, "Corner Store")
 
 
 @pytest.mark.usefixtures("dummy_user")

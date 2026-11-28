@@ -20,8 +20,8 @@ from problems import (
 )
 from pydantic import Field
 from records import add_payee, add_user
-from sql import count, one, run
-from sqlalchemy import Connection, Engine, text
+from sql import count, one, one_row, run
+from sqlalchemy import Connection, Engine
 
 from app.api.dependencies import ConnectionDep, CurrentUserDep, IdempotentCreateDep
 from app.api.idempotency import IdempotentCreate, NewRecord
@@ -115,9 +115,9 @@ def expected_created_response(
     connection: Connection, user: UUID
 ) -> tuple[int, bytes, str, str]:
     """The response the create of the user's only payee should send."""
-    payee, name = connection.execute(
-        text("SELECT id, name FROM payees WHERE user_id = :user"), {"user": user}
-    ).one()
+    payee, name = one_row(
+        connection, "SELECT id, name FROM payees WHERE user_id = :user", user=user
+    )
     return (
         201,
         f'{{"payeeId":"{payee}","name":"{name}"}}'.encode(),

@@ -2,12 +2,19 @@
 
 from typing import Any
 
-from sqlalchemy import Connection, text
+from sqlalchemy import Connection, Row, text
 
 
 def one(connection: Connection, sql: str, **params: object) -> Any:
     """Run a query that returns exactly one value, and return it."""
     return connection.execute(text(sql), params).scalar_one()
+
+
+def one_row(
+    connection: Connection, sql: str, **params: object
+) -> Row[*tuple[Any, ...]]:
+    """Run a query that returns exactly one row, and return it."""
+    return connection.execute(text(sql), params).one()
 
 
 def count(connection: Connection, sql: str, **params: object) -> int:
