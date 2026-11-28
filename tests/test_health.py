@@ -17,6 +17,11 @@ from app.database.engine import get_ping_engine
 from app.services import health
 from app.services.health import HealthCheck, HealthCheckError
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 TIMEOUT_SECONDS = 0.2
 
 
@@ -93,6 +98,11 @@ def release() -> Iterator[threading.Event]:
     event.set()
 
 
+# ================
+# |   Liveness   |
+# ================
+
+
 @pytest.mark.usefixtures("no_build")
 def test_live(client: TestClient) -> None:
     response = client.get("/health/live")
@@ -105,6 +115,11 @@ def test_live_when_database_is_down(client: TestClient) -> None:
     response = client.get("/health/live")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": __version__}
+
+
+# ===================
+# |   Build label   |
+# ===================
 
 
 def test_health_reports_build_label_when_set(client: TestClient, build: str) -> None:
@@ -129,6 +144,11 @@ def test_health_omits_build_label_when_unset(client: TestClient) -> None:
         "version": __version__,
         "checks": {"database": {"status": "ok"}},
     }
+
+
+# =================
+# |   Readiness   |
+# =================
 
 
 @pytest.mark.usefixtures("no_build")

@@ -22,6 +22,11 @@ from app.services.payees import (
     update_payee,
 )
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 USER_ID = UUID("0192f0c4-0000-7000-8000-000000000001")
 OTHER_USER_ID = UUID("0192f0c4-0000-7000-8000-000000000002")
 UNKNOWN_ID = UUID("0192f0c4-0000-7000-8000-0000000000ff")
@@ -43,6 +48,11 @@ def archive(fake_payee_repo: FakePayeeRepository, payee: Payee) -> Payee:
     return archived
 
 
+# ==============
+# |   Create   |
+# ==============
+
+
 def test_create_payee_stores_an_active_payee_for_the_user(
     fake_payee_repo: FakePayeeRepository,
 ) -> None:
@@ -59,6 +69,11 @@ def test_create_payee_raises_name_conflict_naming_the_payee_with_the_name(
     with pytest.raises(PayeeNameConflictError) as raised:
         create_payee(fake_payee_repo, USER_ID, "corner store")
     assert raised.value.existing == existing
+
+
+# ===========
+# |   Get   |
+# ===========
 
 
 def test_get_payee_returns_the_users_payee(
@@ -83,6 +98,11 @@ def test_get_payee_raises_not_found_for_an_unknown_id(
         get_payee(fake_payee_repo, USER_ID, UNKNOWN_ID)
 
 
+# ============
+# |   List   |
+# ============
+
+
 def test_list_payees_returns_the_repositorys_page_for_the_users_criteria(
     fake_payee_repo: FakePayeeRepository,
 ) -> None:
@@ -90,6 +110,11 @@ def test_list_payees_returns_the_repositorys_page_for_the_users_criteria(
     fake_payee_repo.create(OTHER_USER_ID, "Supermarket")
     assert list_payees(fake_payee_repo, USER_ID, CRITERIA) == RecordPage([payee], 1)
     assert fake_payee_repo.list_criteria == CRITERIA
+
+
+# ==============
+# |   Update   |
+# ==============
 
 
 def test_update_payee_renames_the_users_payee(
@@ -126,6 +151,11 @@ def test_update_payee_raises_name_conflict_naming_the_payee_with_the_name(
     with pytest.raises(PayeeNameConflictError) as raised:
         update_payee(fake_payee_repo, USER_ID, payee.id, "supermarket")
     assert raised.value.existing == existing
+
+
+# =============================
+# |   Archive and unarchive   |
+# =============================
 
 
 def test_archive_payee_archives_the_users_payee(
@@ -178,6 +208,11 @@ def test_unarchive_payee_raises_not_found_for_another_users_payee(
     )
     with pytest.raises(NotFoundError):
         unarchive_payee(fake_payee_repo, USER_ID, payee.id)
+
+
+# ==============
+# |   Delete   |
+# ==============
 
 
 def test_delete_payee_removes_the_users_payee(

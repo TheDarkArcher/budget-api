@@ -12,6 +12,11 @@ from app.core.config import get_settings
 from app.main import create_app
 from export_openapi import OPENAPI_PATH, export, openapi_json
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 BUILD_LABEL = "0.2.0-dev.47+1a2b3c4"
 
 
@@ -38,6 +43,11 @@ def build_label(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
 
+# ==============
+# |   Export   |
+# ==============
+
+
 def test_the_committed_openapi_json_matches_the_app() -> None:
     assert OPENAPI_PATH.read_text(encoding="utf-8") == openapi_json(), (
         "openapi.json is out of date; run `uv run poe export-openapi`"
@@ -59,6 +69,11 @@ def test_exports_the_same_text_every_time() -> None:
 @pytest.mark.usefixtures("build_label")
 def test_exports_the_plain_version_even_with_a_build_label() -> None:
     assert json.loads(openapi_json())["info"]["version"] == __version__
+
+
+# =====================
+# |   Served schema   |
+# =====================
 
 
 @pytest.mark.usefixtures("build_label")

@@ -11,6 +11,10 @@ from pydantic import Field
 
 from app.schemas.base import ApiModel, RequestBody
 
+# ====================
+# |   Probe routes   |
+# ====================
+
 
 class ProbeSize(RequestBody):
     value: str
@@ -35,6 +39,11 @@ def echo_parameters(
     return parameters
 
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 @pytest.fixture
 def probe_client(
     probe_router: APIRouter, make_app: Callable[[], FastAPI]
@@ -44,6 +53,11 @@ def probe_client(
 
     with TestClient(make_app()) as client:
         yield client
+
+
+# ======================
+# |   Request bodies   |
+# ======================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -84,6 +98,11 @@ def test_each_undeclared_field_has_its_own_errors_entry(
     assert without_error_details(problem_body) == body_validation_problem(
         "/id", "/archivedAt"
     )
+
+
+# ========================
+# |   Query parameters   |
+# ========================
 
 
 @pytest.mark.usefixtures("dummy_user")

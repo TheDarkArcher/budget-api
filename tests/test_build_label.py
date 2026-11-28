@@ -8,6 +8,10 @@ import pytest
 
 from build_label import build_label
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
 
 def git_cmd(repo: Path, *args: str) -> str:
     # Fixed git arguments from these tests, never user input; git from PATH.
@@ -51,6 +55,11 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+# =====================
+# |   Commit counts   |
+# =====================
+
+
 def test_counts_every_commit_when_there_is_no_release_tag(repo: Path) -> None:
     commit(repo, "Second")
     assert build_label(repo) == f"1.2.0-dev.2+{short_sha(repo)}"
@@ -88,6 +97,11 @@ def test_ignores_tags_that_are_not_releases(repo: Path, tag: str) -> None:
     git_cmd(repo, "tag", tag)
     commit(repo, "Second")
     assert build_label(repo) == f"1.2.0-dev.2+{short_sha(repo)}"
+
+
+# ====================
+# |   Working tree   |
+# ====================
 
 
 def test_marks_uncommitted_changes_as_dirty(repo: Path) -> None:

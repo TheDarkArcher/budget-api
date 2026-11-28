@@ -32,6 +32,11 @@ from sql import count, one, one_row, run
 from sqlalchemy import Connection, Engine, text
 from sqlalchemy.exc import DBAPIError
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 # Statements for each archivable record, keyed by what they do; "record" is
 # the World attribute holding its id. An item size has no column that may
 # change, so its edit changes the value, which the archived check must refuse
@@ -242,7 +247,9 @@ def bob(connection: Connection) -> World:
     return make_world(connection, "Bob")
 
 
-# Keys and defaults
+# =========================
+# |   Keys and defaults   |
+# =========================
 
 
 def test_ids_are_uuid_v7_and_timestamps_default(
@@ -257,8 +264,13 @@ def test_ids_are_uuid_v7_and_timestamps_default(
     assert row.created_at == row.updated_at
 
 
-# User matching: composite foreign keys for direct links between user-owned
-# tables, triggers for transitive links. Never reference another user's data
+# =====================
+# |   User matching   |
+# =====================
+
+
+# Composite foreign keys for direct links between user-owned tables,
+# triggers for transitive links. Never reference another user's data.
 
 
 # Each case names the World attributes it binds from Alice as :<name> and
@@ -417,7 +429,9 @@ def test_direct_links_use_composite_foreign_keys(
     assert columns == 2
 
 
-# Immutable user ownership
+# ================================
+# |   Immutable user ownership   |
+# ================================
 
 
 @pytest.mark.parametrize(
@@ -473,7 +487,9 @@ def test_setting_user_id_to_its_current_value_is_allowed(
     )
 
 
-# CHECK constraints
+# =========================
+# |   CHECK constraints   |
+# =========================
 
 
 @pytest.mark.parametrize(
@@ -570,7 +586,9 @@ def test_size_units_are_a_fixed_case_sensitive_list(
     )
 
 
-# Case-insensitive uniqueness
+# ===================================
+# |   Case-insensitive uniqueness   |
+# ===================================
 
 
 @pytest.mark.parametrize(
@@ -635,8 +653,13 @@ def test_item_sizes_are_unique_within_an_item(
     )
 
 
-# Cascades and restricts. A refused ON DELETE RESTRICT is reported as
-# RestrictViolation (23001), not ForeignKeyViolation (23503).
+# ==============================
+# |   Cascades and restricts   |
+# ==============================
+
+
+# A refused ON DELETE RESTRICT is reported as RestrictViolation (23001),
+# not ForeignKeyViolation (23503).
 
 
 def test_deleting_a_transaction_deletes_its_lines(
@@ -733,7 +756,9 @@ def test_cannot_delete_a_user_who_owns_data(
     )
 
 
-# Immutable records
+# =========================
+# |   Immutable records   |
+# =========================
 
 
 @pytest.mark.parametrize("statements", ARCHIVABLE_RECORDS)
@@ -809,8 +834,13 @@ def test_item_size_cannot_move_to_another_item(
     )
 
 
-# Category links. A link can't change while either of its categories is
-# archived, unless the change is a category's delete removing it.
+# ======================
+# |   Category links   |
+# ======================
+
+
+# A link can't change while either of its categories is archived, unless
+# the change is a category's delete removing it.
 
 
 @pytest.mark.parametrize("archive", ARCHIVE_LINKED_CATEGORY)
@@ -1008,7 +1038,9 @@ def test_a_transaction_category_without_an_applying_link_deletes_with_its_links(
     assert links == 0
 
 
-# Idempotency keys
+# ========================
+# |   Idempotency keys   |
+# ========================
 
 
 def test_idempotency_keys_are_unique_per_user(
@@ -1085,7 +1117,9 @@ def test_deleting_a_user_removes_their_idempotency_keys(
     assert keys == 0
 
 
-# transaction_totals view
+# ===============================
+# |   transaction_totals view   |
+# ===============================
 
 
 def test_view_derives_total_and_line_count(
@@ -1114,7 +1148,9 @@ def test_view_shows_transactions_without_lines(
     assert row.line_count == 0
 
 
-# items_information view
+# ==============================
+# |   items_information view   |
+# ==============================
 
 
 def test_items_information_has_one_row_per_size_with_all_tags(
@@ -1173,7 +1209,9 @@ def test_items_information_shows_sizes_of_untagged_items(
     assert tags == []
 
 
-# updated_at trigger
+# ==========================
+# |   updated_at trigger   |
+# ==========================
 
 
 def test_updates_set_updated_at(connection: Connection, alice: World) -> None:

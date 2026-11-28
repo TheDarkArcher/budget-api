@@ -17,6 +17,11 @@ from app.repositories.item_categories import SQLItemCategoryRepository
 from app.repositories.transaction_categories import SQLTransactionCategoryRepository
 from app.repositories.users import SQLUserRepository
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 EXPECTED_TRANSACTION_CATEGORIES = {
     ("Salary", "income"),
     ("Groceries", "expense"),
@@ -96,6 +101,11 @@ def savepoint_engine(connection: Connection, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(seed, "get_engine", lambda: SavepointEngine(connection))
 
 
+# ===============
+# |   Seeding   |
+# ===============
+
+
 def test_seeds_the_dummy_user_with_the_default_data(connection: Connection) -> None:
     assert seed_on(connection) is True
     assert dummy_user_data(connection) == {
@@ -111,6 +121,11 @@ def test_seeding_again_changes_nothing(connection: Connection) -> None:
     before = dummy_user_data(connection)
     assert seed_on(connection) is False
     assert dummy_user_data(connection) == before
+
+
+# ====================
+# |   Command line   |
+# ====================
 
 
 @pytest.mark.usefixtures("savepoint_engine")
