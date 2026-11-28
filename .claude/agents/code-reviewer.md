@@ -34,7 +34,8 @@ git diff HEAD
 Read `AGENTS.md` and the parts of `docs/DESIGN.md` that relate to the changed files
 ("Domain Rules", "Architecture", "Data Access and Migrations", "Data Model",
 "API Design" and "Engineering Practice", found by their header text). These are the
-standard you review against.
+standard you review against. When tests or test helpers changed, also read
+`.claude/skills/tests/SKILL.md`.
 
 ## Step 3: Review the changed code
 
@@ -73,7 +74,7 @@ in untouched code unless a change makes them worse.
 - New dependencies not added through `uv add`
 - Missing or weakened tests for changed behaviour that `docs/DESIGN.md` states
 - A bug fix without a regression test, as the Regression tests entry in DESIGN.md's Testing section describes
-- Tests that break the Tests section of `AGENTS.md` (behaviour the design hasn't decided, or another layer's work simulated); never suggest tests for behaviour the design hasn't decided. Regression tests for a bug fix are the exception
+- Tests that break the Tests section of `AGENTS.md` or the `tests` skill (behaviour the design hasn't decided, another layer's work simulated, partial body checks, names or layout that don't follow the skill); never suggest tests for behaviour the design hasn't decided. Regression tests for a bug fix are the exception
 - Comments that restate the code; naming that does not match the surrounding code
 
 Use Bash only for read-only commands (`git diff`, `git log`, `git show`, `git status`,

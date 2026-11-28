@@ -1,1 +1,2 @@
+- [Skill vs rules narrowing](recurring-skill-vs-rules-narrowing.md) — skills must not narrow or copy AGENTS.md/DESIGN.md rules; check helper claims against tests/
 - [DESIGN vs checklist drift](recurring-design-checklist-drift.md) — check new DESIGN rules reach local checklists, the status table and absolute claims

@@ -1,4 +1,4 @@
-- [Test helper modules](project_test_helper_modules.md) — tests/ helpers are top-level imports; asserting helpers must be registered for assert rewriting
+- [Test helper modules](project_test_helper_modules.md) — tests/ helpers are top-level imports; test conventions are in the tests skill; one user's record ids are a "world"
 - [Scripts, subprocess and test conventions](project_scripts_subprocess_and_tests.md) — S603 noqa precedent, script test imports, cleanup pitfalls
 - [Constraint error mapping](project_constraint_error_mapping.md) — constraint name to domain error to problem type; verified names, accepted gaps
 - [OpenAPI problem documentation](project_openapi_problem_documentation.md) — idempotent, refs resolve, optional not nullable, no path-only 422

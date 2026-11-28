@@ -56,11 +56,10 @@
 
 ## Tests
 
+- Follow the `tests` skill whenever writing, changing or reviewing a test.
 - Write tests before the code they cover. For each change in behaviour, add or update a test, run it and see it fail for the expected reason, then write the code that makes it pass.
 - Refactors that keep behaviour need no new test, but the existing tests must still pass.
 - Test only behaviour that `docs/DESIGN.md` states in its Domain Rules, Architecture, Decisions (Data Model), API Design or Engineering Practice, in the layer that enforces it, with the kinds of test its Testing section describes. A change in behaviour the design doesn't state needs no test; if it needs a decision, ask first, as the Design Document section requires. The exception is a bug fix, which always gets a regression test, as the Testing section of `docs/DESIGN.md` describes. Don't simulate another layer's work, such as writing a service's archive cascade in SQL in a database test.
-- Compare a response's whole JSON body, not parts of it, using a helper to remove values that can't be predicted. The OpenAPI document is the exception.
-- In test modules, order top-level code as: constants, helper classes, helper functions, fixtures, then tests.
 
 ## Quality Gates
 
