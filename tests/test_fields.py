@@ -77,7 +77,7 @@ def test_name_is_trimmed_and_kept(
 
 @pytest.mark.usefixtures("dummy_user")
 @pytest.mark.parametrize("sent", ["", "   ", "x" * 101])
-def test_name_outside_its_length_after_trimming_is_rejected(
+def test_name_outside_its_length_after_trimming_returns_validation_problem(
     probe_client: TestClient, sent: str
 ) -> None:
     response = probe_client.post(
@@ -88,7 +88,7 @@ def test_name_outside_its_length_after_trimming_is_rejected(
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_name_with_a_nul_character_is_rejected(
+def test_name_with_a_nul_character_returns_validation_problem(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.post(
@@ -153,7 +153,7 @@ def test_stored_decimal_is_returned_as_a_string_without_trailing_zeros(
         "٣",
     ],
 )
-def test_decimal_that_is_not_a_plain_decimal_string_is_rejected(
+def test_decimal_that_is_not_a_plain_decimal_string_returns_validation_problem(
     probe_client: TestClient, sent: Any
 ) -> None:
     response = probe_client.post(

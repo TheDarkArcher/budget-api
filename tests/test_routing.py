@@ -60,7 +60,7 @@ def probe_client(
         (f"categoryId={THING_ID}&categoryId={OTHER_ID}", "categoryId"),
     ],
 )
-def test_parameter_sent_twice_is_rejected(
+def test_parameter_sent_twice_returns_validation_problem(
     probe_client: TestClient, query: str, parameter: str
 ) -> None:
     response = probe_client.get(f"/api/v1/test/things?{query}")
