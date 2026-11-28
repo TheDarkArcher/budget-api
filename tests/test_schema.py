@@ -930,11 +930,7 @@ def test_deleting_a_category_waits_for_a_concurrent_link(engine: Engine) -> None
 def test_deleting_an_archived_transaction_category_removes_its_links(
     connection: Connection, alice: World
 ) -> None:
-    run(
-        connection,
-        "UPDATE transaction_categories SET archived_at = now() WHERE id = :id",
-        id=alice.category,
-    )
+    run(connection, ARCHIVE_TRANSACTION_CATEGORY, category=alice.category)
     run(
         connection,
         "DELETE FROM transaction_categories WHERE id = :id",
@@ -954,11 +950,7 @@ def test_deleting_an_item_category_removes_links_to_archived_categories(
 ) -> None:
     item_category = add_item_category(connection, alice.user, "Household")
     link(connection, alice.category, item_category)
-    run(
-        connection,
-        "UPDATE transaction_categories SET archived_at = now() WHERE id = :id",
-        id=alice.category,
-    )
+    run(connection, ARCHIVE_TRANSACTION_CATEGORY, category=alice.category)
     run(connection, "DELETE FROM item_categories WHERE id = :id", id=item_category)
     links = count(
         connection,
@@ -996,10 +988,7 @@ def test_cannot_delete_an_active_transaction_category_with_an_active_link(
             " WHERE transaction_category_id = :category",
             id="link archived",
         ),
-        pytest.param(
-            "UPDATE item_categories SET archived_at = now() WHERE id = :item_category",
-            id="item category archived",
-        ),
+        pytest.param(ARCHIVE_ITEM_CATEGORY, id="item category archived"),
     ],
 )
 def test_a_transaction_category_without_an_applying_link_deletes_with_its_links(

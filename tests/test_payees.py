@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from problems import (
     ARCHIVED_PROBLEM,
+    IN_USE_TRANSACTION_PROBLEM,
     NOT_FOUND_PROBLEM,
     assert_problem,
     body_validation_problem,
@@ -112,11 +113,7 @@ def test_create_returns_name_conflict_problem_for_an_archived_payees_name(
     client: TestClient, connection: Connection
 ) -> None:
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
-    archived_at = one(
-        connection,
-        "SELECT archived_at FROM payees WHERE id = :payee_id",
-        payee_id=payee_id,
-    )
+    archived_at = archive_time(connection, payee_id)
     response = post_payee(client, "Corner Store")
     problem_body = assert_problem(response, 409)
     existing = with_parsed_archive_time(problem_body["existing"])
@@ -178,11 +175,7 @@ def test_get_returns_an_archived_payee_with_its_archive_time(
     client: TestClient, connection: Connection
 ) -> None:
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store", archived=True)
-    archived_at = one(
-        connection,
-        "SELECT archived_at FROM payees WHERE id = :payee_id",
-        payee_id=payee_id,
-    )
+    archived_at = archive_time(connection, payee_id)
     response = client.get(f"{PATH}/{payee_id}")
     assert response.status_code == 200
     assert with_parsed_archive_time(response.json()) == {
@@ -238,11 +231,7 @@ def test_list_returns_only_archived_payees_when_asked_for(
 ) -> None:
     add_payee(connection, DUMMY_USER_ID, "Supermarket")
     bakery = add_payee(connection, DUMMY_USER_ID, "Bakery", archived=True)
-    archived_at = one(
-        connection,
-        "SELECT archived_at FROM payees WHERE id = :payee_id",
-        payee_id=bakery,
-    )
+    archived_at = archive_time(connection, bakery)
     response = client.get(PATH, params={"archived": "true"})
     assert response.status_code == 200
     body = response.json()
@@ -484,13 +473,7 @@ def test_delete_returns_in_use_problem_for_a_payee_a_transaction_uses(
     add_transaction(connection, DUMMY_USER_ID, category_id, payee_id)
     response = client.delete(f"{PATH}/{payee_id}")
     problem_body = assert_problem(response, 409)
-    assert problem_body == {
-        "type": "/problems/in-use/transaction",
-        "title": "In use by a transaction",
-        "status": 409,
-        "detail": "A transaction uses the record, so it can't be deleted;"
-        " archive it instead.",
-    }
+    assert problem_body == IN_USE_TRANSACTION_PROBLEM
     assert payees_count(connection) == 1
 
 

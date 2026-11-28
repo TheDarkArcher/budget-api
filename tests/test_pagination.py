@@ -8,7 +8,11 @@ from uuid import UUID
 import pytest
 from fastapi import APIRouter, FastAPI, Query
 from fastapi.testclient import TestClient
-from problems import assert_problem, without_error_details
+from problems import (
+    assert_problem,
+    parameter_validation_problem,
+    without_error_details,
+)
 from records import add_item, add_item_category, add_payee, add_tag, add_user
 from sql import run
 from sqlalchemy import Connection, text, tstring
@@ -406,13 +410,9 @@ def test_parameter_outside_its_allowed_values_is_rejected(
 ) -> None:
     response = probe_client.get("/api/v1/test/payees", params={parameter: value})
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"parameter": parameter}],
-    }
+    assert without_error_details(problem_body) == parameter_validation_problem(
+        parameter
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")

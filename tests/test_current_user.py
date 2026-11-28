@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
-from problems import assert_problem
+from problems import FORBIDDEN_PROBLEM, NOT_FOUND_PROBLEM, assert_problem
 from sql import count
 from sqlalchemy import Connection
 
@@ -99,12 +99,7 @@ def test_requests_return_forbidden_problem_without_the_dummy_user(
 ) -> None:
     response = probe_client.request(method, path)
     problem_body = assert_problem(response, 403)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Forbidden",
-        "status": 403,
-        "detail": "Not authorised",
-    }
+    assert problem_body == FORBIDDEN_PROBLEM
     assert "has the database been seeded?" in caplog.text
 
 
@@ -135,9 +130,4 @@ def test_unversioned_api_paths_dont_need_the_dummy_user(
 ) -> None:
     response = probe_client.get("/api/test/unknown")
     problem_body = assert_problem(response, 404)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Not Found",
-        "status": 404,
-        "detail": "Not Found",
-    }
+    assert problem_body == NOT_FOUND_PROBLEM

@@ -7,7 +7,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from problems import assert_problem
+from problems import assert_exception_logged, assert_problem
 
 from app import __version__
 from app.api.health import get_health_checks
@@ -191,7 +191,4 @@ def test_unexpected_error_in_a_check_is_not_hidden(
     response = client.get("/health/ready")
     # A server error, not a 503 that reports the check as merely unhealthy.
     assert_problem(response, 500)
-    assert any(
-        record.exc_info is not None and "bug in the check" in str(record.exc_info[1])
-        for record in caplog.records
-    )
+    assert_exception_logged(caplog, "bug in the check")

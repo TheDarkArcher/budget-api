@@ -12,7 +12,12 @@ import httpx2
 import pytest
 from fastapi import APIRouter, FastAPI, Response
 from fastapi.testclient import TestClient
-from problems import assert_problem, without_error_details
+from problems import (
+    VALIDATION_PROBLEM,
+    assert_problem,
+    parameter_validation_problem,
+    without_error_details,
+)
 from pydantic import Field
 from records import add_payee, add_user
 from sql import count, one, run
@@ -227,13 +232,9 @@ def test_idempotency_key_outside_its_length_returns_validation_problem(
 ) -> None:
     response = post_payee(probe_client, [key])
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"parameter": "Idempotency-Key"}],
-    }
+    assert without_error_details(problem_body) == parameter_validation_problem(
+        "Idempotency-Key"
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -253,10 +254,7 @@ def test_idempotency_key_sent_twice_returns_validation_problem(
     response = post_payee(probe_client, ["a", "b"])
     problem_body = assert_problem(response, 422)
     assert problem_body == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
+        **VALIDATION_PROBLEM,
         "errors": [
             {
                 "detail": "Send this parameter only once.",

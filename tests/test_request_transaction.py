@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
-from problems import assert_problem
+from problems import INTERNAL_ERROR_PROBLEM, assert_problem
 from sqlalchemy import Connection
 from sqlalchemy.exc import OperationalError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -97,9 +97,4 @@ def test_a_failed_commit_returns_internal_error_problem(
     with TestClient(app) as client:
         response = client.post("/api/v1/test/create")
     problem_body = assert_problem(response, 500)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Internal Server Error",
-        "status": 500,
-        "detail": "An unexpected error occurred.",
-    }
+    assert problem_body == INTERNAL_ERROR_PROBLEM
