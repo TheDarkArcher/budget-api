@@ -63,5 +63,27 @@ Breaking changes are listed under their own **Breaking** heading.
   replaced without asking, and recreated empty if the restore fails. A
   database that isn't empty is only replaced with `--force`, and is kept
   until the restore succeeds.
+- Payee endpoints under `/api/v1/payees`: list, create, get, update
+  (`PUT`), delete, archive and unarchive, each scoped to the current user,
+  so another user's payee returns 404. Payee names are unique per user,
+  ignoring case and including archived payees; a clashing name returns a
+  `/problems/name-conflict` problem whose `existing` member names the payee
+  that has it. Updating an archived payee returns `/problems/archived`, and
+  deleting a payee a transaction uses returns `/problems/in-use/transaction`.
+  Archiving an archived payee, or unarchiving an active one, changes nothing,
+  so either request is safe to repeat.
+- Paged lists: list endpoints take `page` and `pageSize` (1 to 200, default
+  25) and return `data` with `page`, `pageSize`, `totalItems` and
+  `totalPages`. Lookup lists also take `q` to search names, `archived`
+  (`false`, `true` or `all`, default `false`), and `sort` and `order`.
+- An optional `Idempotency-Key` header on requests that create a record. A
+  repeat with the same key and request within 24 hours returns the original
+  response instead of creating a second record, and a repeat sent while the
+  first is still running waits for it. The same key with a different request
+  returns a `/problems/idempotency-key-mismatch` problem.
+- Request bodies refuse fields they don't declare, at the top level or in a
+  nested object, with a `/problems/validation` problem whose `errors` entries
+  point at each such field. Query parameters an endpoint doesn't declare are
+  still ignored.
 
 [Unreleased]: https://github.com/TheDarkArcher/budget-api/commits/main
