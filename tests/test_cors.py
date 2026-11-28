@@ -9,6 +9,11 @@ from httpx2 import Response
 from app.core.config import get_settings
 from app.main import create_app
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 ALLOWED = "http://frontend.test"
 SECOND = "http://second.test"
 OTHER = "http://elsewhere.test"
@@ -36,6 +41,11 @@ def cors_client() -> Iterator[TestClient]:
         with TestClient(create_app()) as client:
             yield client
     get_settings.cache_clear()
+
+
+# ==========================
+# |   Preflight requests   |
+# ==========================
 
 
 def test_preflight_from_allowed_origin(cors_client: TestClient) -> None:
@@ -93,6 +103,11 @@ def test_every_listed_origin_is_allowed_after_trimming(
 ) -> None:
     response = preflight(cors_client, origin)
     assert response.headers["access-control-allow-origin"] == origin
+
+
+# =================
+# |   Responses   |
+# =================
 
 
 def test_response_exposes_location_to_allowed_origin(cors_client: TestClient) -> None:

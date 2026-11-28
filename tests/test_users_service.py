@@ -13,7 +13,17 @@ from app.repositories.users import User
 from app.services import users
 from app.services.users import get_user, provision_user
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 USER_ID = UUID("0192f0c4-0000-7000-8000-000000000001")
+
+
+# ====================
+# |   Provisioning   |
+# ====================
 
 
 def test_creates_the_default_transaction_categories(
@@ -110,6 +120,11 @@ def test_default_links_only_use_default_categories() -> None:
     assert links.keys() == users.DEFAULT_TRANSACTION_CATEGORIES.keys()
     linked = {name for names in links.values() for name in names}
     assert linked <= set(users.DEFAULT_ITEM_CATEGORIES)
+
+
+# ======================
+# |   Getting a user   |
+# ======================
 
 
 def test_get_user_returns_the_user(fake_user_repo: FakeUserRepository) -> None:

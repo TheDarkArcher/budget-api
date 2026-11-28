@@ -21,6 +21,11 @@ from app.api import v1
 from app.api.routing import SingleValueRoute
 from app.schemas.pagination import PageParameters
 
+# ====================
+# |   Probe routes   |
+# ====================
+
+
 THING_ID = UUID("00000000-0000-7000-8000-00000000000a")
 OTHER_ID = UUID("00000000-0000-7000-8000-00000000000b")
 
@@ -40,6 +45,11 @@ def get_thing(thing_id: UUID, size: int = 1) -> dict[str, bool]:
     return {"ok": True}
 
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 @pytest.fixture
 def probe_client(
     probe_router: APIRouter, make_app: Callable[[], FastAPI]
@@ -49,6 +59,11 @@ def probe_client(
 
     with TestClient(make_app()) as client:
         yield client
+
+
+# =============================
+# |   Parameters sent twice   |
+# =============================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -105,6 +120,11 @@ def test_malformed_path_id_returns_not_found_problem_even_if_a_parameter_is_sent
     response = probe_client.get("/api/v1/test/things/not-an-id?size=1&size=2")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
+
+
+# =====================
+# |   Route classes   |
+# =====================
 
 
 def test_every_v1_route_rejects_parameters_sent_twice() -> None:

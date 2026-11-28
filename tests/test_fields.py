@@ -14,6 +14,11 @@ from problems import assert_problem, body_validation_problem, without_error_deta
 from app.schemas.base import ApiModel
 from app.schemas.fields import DecimalString, Name, Reference
 
+# ====================
+# |   Probe fields   |
+# ====================
+
+
 ACTIVE_ID = UUID("00000000-0000-7000-8000-00000000000a")
 ARCHIVED_ID = UUID("00000000-0000-7000-8000-00000000000b")
 ARCHIVED_AT = datetime(2026, 11, 24, 9, 30, tzinfo=UTC)
@@ -44,6 +49,11 @@ def list_references() -> list[ProbeReference]:
     ]
 
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 @pytest.fixture
 def probe_client(
     probe_router: APIRouter, make_app: Callable[[], FastAPI]
@@ -54,6 +64,11 @@ def probe_client(
 
     with TestClient(make_app()) as client:
         yield client
+
+
+# =============
+# |   Names   |
+# =============
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -96,6 +111,11 @@ def test_name_with_a_nul_character_returns_validation_problem(
     )
     problem_body = assert_problem(response, 422)
     assert without_error_details(problem_body) == body_validation_problem("/name")
+
+
+# =======================
+# |   Decimal strings   |
+# =======================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -161,6 +181,11 @@ def test_decimal_that_is_not_a_plain_decimal_string_returns_validation_problem(
     )
     problem_body = assert_problem(response, 422)
     assert without_error_details(problem_body) == body_validation_problem("/value")
+
+
+# ==================
+# |   References   |
+# ==================
 
 
 @pytest.mark.usefixtures("dummy_user")

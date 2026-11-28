@@ -25,6 +25,11 @@ from backups import (
     restore,
 )
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 DATABASE = "backup_scratch"
 OLD_ASIDE = f"{DATABASE}_before_restore_20000101T000000"
 # The time tests fix the script's timestamp to, and the set-aside name it gives.
@@ -226,6 +231,11 @@ def dump(scratch: Engine) -> Path:
     return backup()
 
 
+# ==================
+# |   Backing up   |
+# ==================
+
+
 def test_backup_writes_a_timestamped_dump_of_the_database(
     dump: Path,
 ) -> None:
@@ -276,6 +286,11 @@ def test_a_second_backup_in_the_same_second_keeps_the_first(
     assert first.stat().st_size == size > 0
 
 
+# =========================================
+# |   Restoring into a missing database   |
+# =========================================
+
+
 def test_restores_into_a_missing_database(
     dump: Path, scratch: Engine, admin: Engine
 ) -> None:
@@ -283,6 +298,33 @@ def test_restores_into_a_missing_database(
     assert restore(dump) == DATABASE
     assert notes(scratch) == ["original"]
     assert scratch_databases(admin) == [DATABASE]
+
+
+def test_a_failed_restore_into_a_missing_database_leaves_nothing(
+    dump: Path, admin: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drop_scratch(admin)
+    make_restores_fail(monkeypatch)
+    with pytest.raises(RestoreError, match="nothing was changed"):
+        restore(dump)
+    assert scratch_databases(admin) == []
+
+
+def test_an_interrupted_restore_into_a_missing_database_leaves_nothing(
+    dump: Path,
+    admin: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    drop_scratch(admin)
+    monkeypatch.setattr(backups, "_run", interrupted_after_restore(backups._run))
+    with pytest.raises(KeyboardInterrupt):
+        restore(dump)
+    assert scratch_databases(admin) == []
+
+
+# ========================================
+# |   Restoring over an empty database   |
+# ========================================
 
 
 def test_drops_an_empty_database_rather_than_setting_it_aside(
@@ -312,43 +354,6 @@ def test_a_failed_restore_over_an_empty_database_leaves_it_empty(
     # Dropped and created again, empty.
     assert database_oid(admin) != oid
     assert backups._is_empty(DATABASE)
-
-
-def test_a_new_database_counts_as_empty(scratch: Engine) -> None:
-    make_empty(scratch)
-    assert backups._is_empty(DATABASE)
-
-
-# Each case leaves one object in the otherwise empty scratch database.
-@pytest.mark.parametrize(
-    "sql",
-    [
-        pytest.param("CREATE TABLE things (id int)", id="table"),
-        pytest.param("CREATE VIEW one AS SELECT 1 AS one", id="view"),
-        pytest.param("CREATE SEQUENCE counter", id="sequence"),
-        pytest.param(
-            "CREATE FUNCTION one() RETURNS int LANGUAGE sql AS 'SELECT 1'",
-            id="function",
-        ),
-        pytest.param("CREATE TYPE mood AS ENUM ('happy')", id="type"),
-        pytest.param("CREATE SCHEMA extra", id="schema"),
-        pytest.param("CREATE EXTENSION pg_trgm", id="extension"),
-        pytest.param("SELECT lo_create(0)", id="large object"),
-    ],
-)
-def test_any_object_counts_as_not_empty(scratch: Engine, sql: str) -> None:
-    make_empty(scratch)
-    with scratch.begin() as connection:
-        connection.execute(text(sql))
-    assert not backups._is_empty(DATABASE)
-
-
-def test_a_database_that_cant_be_checked_counts_as_not_empty(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with caplog.at_level(logging.WARNING):
-        assert not backups._is_empty("no_such_database")
-    assert 'Couldn\'t check whether "no_such_database" is empty' in caplog.text
 
 
 def test_a_failed_drop_of_an_empty_database_changes_nothing(
@@ -409,6 +414,53 @@ def test_an_empty_database_with_a_long_name_isnt_refused(
     restore(dump)
     assert notes(scratch) == ["original"]
     assert scratch_databases(admin) == [DATABASE]
+
+
+# =======================
+# |   Emptiness check   |
+# =======================
+
+
+def test_a_new_database_counts_as_empty(scratch: Engine) -> None:
+    make_empty(scratch)
+    assert backups._is_empty(DATABASE)
+
+
+# Each case leaves one object in the otherwise empty scratch database.
+@pytest.mark.parametrize(
+    "sql",
+    [
+        pytest.param("CREATE TABLE things (id int)", id="table"),
+        pytest.param("CREATE VIEW one AS SELECT 1 AS one", id="view"),
+        pytest.param("CREATE SEQUENCE counter", id="sequence"),
+        pytest.param(
+            "CREATE FUNCTION one() RETURNS int LANGUAGE sql AS 'SELECT 1'",
+            id="function",
+        ),
+        pytest.param("CREATE TYPE mood AS ENUM ('happy')", id="type"),
+        pytest.param("CREATE SCHEMA extra", id="schema"),
+        pytest.param("CREATE EXTENSION pg_trgm", id="extension"),
+        pytest.param("SELECT lo_create(0)", id="large object"),
+    ],
+)
+def test_any_object_counts_as_not_empty(scratch: Engine, sql: str) -> None:
+    make_empty(scratch)
+    with scratch.begin() as connection:
+        connection.execute(text(sql))
+    assert not backups._is_empty(DATABASE)
+
+
+def test_a_database_that_cant_be_checked_counts_as_not_empty(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        assert not backups._is_empty("no_such_database")
+    assert 'Couldn\'t check whether "no_such_database" is empty' in caplog.text
+
+
+# ===========================================
+# |   Restoring over a database with data   |
+# ===========================================
 
 
 def test_refuses_a_database_with_data_without_force(
@@ -485,16 +537,6 @@ def test_a_failed_restore_keeps_the_original_database(
     assert scratch_databases(admin) == [DATABASE]
 
 
-def test_a_failed_restore_into_a_missing_database_leaves_nothing(
-    dump: Path, admin: Engine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    drop_scratch(admin)
-    make_restores_fail(monkeypatch)
-    with pytest.raises(RestoreError, match="nothing was changed"):
-        restore(dump)
-    assert scratch_databases(admin) == []
-
-
 @pytest.mark.parametrize(
     "error",
     [
@@ -545,28 +587,6 @@ def test_an_interrupted_restore_puts_the_original_back(
     assert scratch_databases(admin) == [DATABASE]
 
 
-def test_a_dump_that_cant_be_opened_changes_nothing(
-    scratch: Engine, admin: Engine, tmp_path: Path
-) -> None:
-    add_note(scratch, "changed")
-    with pytest.raises(RestoreError, match=r"Couldn't open .*nothing was changed"):
-        restore(tmp_path / "missing.dump", force=True)
-    assert notes(scratch) == ["changed", "original"]
-    assert scratch_databases(admin) == [DATABASE]
-
-
-def test_an_interrupted_restore_into_a_missing_database_leaves_nothing(
-    dump: Path,
-    admin: Engine,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    drop_scratch(admin)
-    monkeypatch.setattr(backups, "_run", interrupted_after_restore(backups._run))
-    with pytest.raises(KeyboardInterrupt):
-        restore(dump)
-    assert scratch_databases(admin) == []
-
-
 def test_an_interrupted_restore_reports_a_failed_undo(
     dump: Path,
     admin: Engine,
@@ -608,11 +628,31 @@ def test_a_failed_clean_up_still_counts_as_restored(
     assert scratch_databases(admin) == [DATABASE, NEW_ASIDE]
 
 
+# ================================
+# |   Dumps that can't be read   |
+# ================================
+
+
+def test_a_dump_that_cant_be_opened_changes_nothing(
+    scratch: Engine, admin: Engine, tmp_path: Path
+) -> None:
+    add_note(scratch, "changed")
+    with pytest.raises(RestoreError, match=r"Couldn't open .*nothing was changed"):
+        restore(tmp_path / "missing.dump", force=True)
+    assert notes(scratch) == ["changed", "original"]
+    assert scratch_databases(admin) == [DATABASE]
+
+
 def test_rejects_a_file_that_isnt_a_dump(tmp_path: Path) -> None:
     path = tmp_path / "notes.txt"
     path.write_text("not a dump")
     with pytest.raises(RestoreError, match="Couldn't read"):
         restore(path)
+
+
+# ====================
+# |   Command line   |
+# ====================
 
 
 def test_main_backs_up_and_restores(scratch: Engine) -> None:

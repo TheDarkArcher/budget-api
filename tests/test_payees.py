@@ -24,6 +24,11 @@ from sqlalchemy import Connection
 
 from app.core.dummy_user import DUMMY_USER_ID
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 PATH = "/api/v1/payees"
 KEY = "5b0c3f3e-8f0a-4d55-9a6e-2f1d7c3b9e41"
 
@@ -72,6 +77,11 @@ def payees_count(connection: Connection, user: UUID = DUMMY_USER_ID) -> int:
         "SELECT count(*) FROM payees WHERE user_id = :user",
         user=user,
     )
+
+
+# ==============
+# |   Create   |
+# ==============
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -146,6 +156,11 @@ def test_create_documents_its_name_conflict_problem(client: TestClient) -> None:
     assert properties["existing"]["$ref"] == "#/components/schemas/PayeeReference"
 
 
+# ===========
+# |   Get   |
+# ===========
+
+
 @pytest.mark.usefixtures("dummy_user")
 def test_get_returns_the_payee(client: TestClient, connection: Connection) -> None:
     payee_id = add_payee(connection, DUMMY_USER_ID, "Corner Store")
@@ -183,6 +198,11 @@ def test_get_returns_not_found_problem_for_a_malformed_id(
     response = client.get(f"{PATH}/not-an-id")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
+
+
+# ============
+# |   List   |
+# ============
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -253,6 +273,11 @@ def test_list_returns_validation_problem_for_a_sort_other_than_name(
     response = client.get(PATH, params={"sort": "itemCategory"})
     problem_body = assert_problem(response, 422)
     assert without_error_details(problem_body) == parameter_validation_problem("sort")
+
+
+# ==============
+# |   Update   |
+# ==============
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -347,6 +372,11 @@ def test_update_documents_its_conflict_problems(client: TestClient) -> None:
     }
 
 
+# =============================
+# |   Archive and unarchive   |
+# =============================
+
+
 @pytest.mark.usefixtures("dummy_user")
 def test_archive_returns_the_archived_payee(
     client: TestClient, connection: Connection
@@ -411,6 +441,11 @@ def test_archive_actions_return_not_found_problem_for_a_malformed_id(
     response = client.post(f"{PATH}/not-an-id/{action}")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
+
+
+# ==============
+# |   Delete   |
+# ==============
 
 
 @pytest.mark.usefixtures("dummy_user")

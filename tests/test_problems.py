@@ -41,6 +41,11 @@ from app.core.errors import (
 from app.schemas.base import ApiModel
 from app.schemas.problems import ProblemErrorEntry
 
+# ====================
+# |   Probe routes   |
+# ====================
+
+
 INTERNAL_DETAIL = "connection string postgresql://secret"
 EXISTING_ID = UUID("00000000-0000-7000-8000-00000000000a")
 THING_ID = UUID("00000000-0000-7000-8000-00000000000b")
@@ -136,6 +141,11 @@ def replace_thing(thing_id: UUID, body: ProbeBody) -> dict[str, bool]:
     return {"ok": True}
 
 
+# ============================
+# |   Helpers and fixtures   |
+# ============================
+
+
 def post_thing(
     client: TestClient,
     key: str,
@@ -174,6 +184,11 @@ def probe_client(
         yield client
 
 
+# =================================
+# |   Unknown paths and methods   |
+# =================================
+
+
 @pytest.mark.usefixtures("dummy_user")
 def test_unknown_path_returns_not_found_problem(probe_client: TestClient) -> None:
     response = probe_client.get("/api/v1/test/unknown")
@@ -194,6 +209,11 @@ def test_unsupported_method_returns_method_not_allowed_problem_with_allow(
         "status": 405,
         "detail": "Method Not Allowed",
     }
+
+
+# ===========================
+# |   Validation problems   |
+# ===========================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -239,6 +259,46 @@ def test_invalid_parameters_are_named_in_the_validation_problem(
     )
 
 
+# ==========================
+# |   Malformed path ids   |
+# ==========================
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_malformed_path_id_returns_not_found_problem(probe_client: TestClient) -> None:
+    response = probe_client.put(
+        "/api/v1/test/things/not-an-id",
+        json={"pageSize": 1, "sizes": []},
+    )
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_malformed_path_id_returns_not_found_problem_even_if_the_body_is_invalid(
+    probe_client: TestClient,
+) -> None:
+    response = probe_client.put("/api/v1/test/things/not-an-id", json={})
+    problem_body = assert_problem(response, 404)
+    assert problem_body == NOT_FOUND_PROBLEM
+
+
+@pytest.mark.usefixtures("dummy_user")
+def test_well_formed_path_id_returns_validation_problem_for_the_body(
+    probe_client: TestClient,
+) -> None:
+    response = probe_client.put(f"/api/v1/test/things/{THING_ID}", json={})
+    problem_body = assert_problem(response, 422)
+    assert without_error_details(problem_body) == body_validation_problem(
+        "/pageSize", "/sizes"
+    )
+
+
+# =====================
+# |   Server errors   |
+# =====================
+
+
 @pytest.mark.usefixtures("dummy_user")
 def test_unexpected_error_returns_internal_error_problem_without_internals(
     probe_client: TestClient, caplog: pytest.LogCaptureFixture
@@ -250,6 +310,11 @@ def test_unexpected_error_returns_internal_error_problem_without_internals(
     assert "secret" not in response.text
     assert "Traceback" not in response.text
     assert_exception_logged(caplog, INTERNAL_DETAIL)
+
+
+# ======================
+# |   Named problems   |
+# ======================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -285,33 +350,70 @@ def test_named_problem_carries_its_errors_entries(probe_client: TestClient) -> N
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_malformed_path_id_returns_not_found_problem(probe_client: TestClient) -> None:
-    response = probe_client.put(
-        "/api/v1/test/things/not-an-id",
-        json={"pageSize": 1, "sizes": []},
-    )
-    problem_body = assert_problem(response, 404)
-    assert problem_body == NOT_FOUND_PROBLEM
-
-
-@pytest.mark.usefixtures("dummy_user")
-def test_malformed_path_id_returns_not_found_problem_even_if_the_body_is_invalid(
-    probe_client: TestClient,
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [
+        pytest.param(
+            "in-use-transaction",
+            IN_USE_TRANSACTION_PROBLEM,
+            id="in use by a transaction",
+        ),
+        pytest.param(
+            "in-use-item",
+            {
+                "type": "/problems/in-use/item",
+                "title": "In use by an item",
+                "status": 409,
+                "detail": "An item uses the record, so it can't be deleted;"
+                " archive it instead.",
+            },
+            id="in use by an item",
+        ),
+        pytest.param(
+            "in-use-item-category",
+            {
+                "type": "/problems/in-use/item-category",
+                "title": "Linked to an active item category",
+                "status": 409,
+                "detail": "The record is linked to an active item category, so it"
+                " can't be deleted.",
+            },
+            id="linked to an active item category",
+        ),
+        pytest.param(
+            "archived",
+            ARCHIVED_PROBLEM,
+            id="archived",
+        ),
+        pytest.param(
+            "type-change",
+            {
+                "type": "/problems/validation",
+                "title": "Validation failed",
+                "status": 422,
+                "detail": "The request isn't valid; see errors for each problem.",
+                "errors": [
+                    {
+                        "detail": "A transaction category's type can't be changed.",
+                        "pointer": "/type",
+                    }
+                ],
+            },
+            id="type change",
+        ),
+    ],
+)
+def test_domain_error_returns_its_problem(
+    probe_client: TestClient, kind: str, expected: dict[str, Any]
 ) -> None:
-    response = probe_client.put("/api/v1/test/things/not-an-id", json={})
-    problem_body = assert_problem(response, 404)
-    assert problem_body == NOT_FOUND_PROBLEM
+    response = probe_client.post("/api/v1/test/domain-error", params={"kind": kind})
+    problem_body = assert_problem(response, expected["status"])
+    assert problem_body == expected
 
 
-@pytest.mark.usefixtures("dummy_user")
-def test_well_formed_path_id_returns_validation_problem_for_the_body(
-    probe_client: TestClient,
-) -> None:
-    response = probe_client.put(f"/api/v1/test/things/{THING_ID}", json={})
-    problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == body_validation_problem(
-        "/pageSize", "/sizes"
-    )
+# ===================
+# |   Error order   |
+# ===================
 
 
 @pytest.mark.parametrize(
@@ -392,65 +494,3 @@ def test_reused_key_returns_mismatch_problem_even_if_the_create_would_be_refused
         "status": 422,
         "detail": "The Idempotency-Key was already used with a different request.",
     }
-
-
-@pytest.mark.usefixtures("dummy_user")
-@pytest.mark.parametrize(
-    ("kind", "expected"),
-    [
-        pytest.param(
-            "in-use-transaction",
-            IN_USE_TRANSACTION_PROBLEM,
-            id="in use by a transaction",
-        ),
-        pytest.param(
-            "in-use-item",
-            {
-                "type": "/problems/in-use/item",
-                "title": "In use by an item",
-                "status": 409,
-                "detail": "An item uses the record, so it can't be deleted;"
-                " archive it instead.",
-            },
-            id="in use by an item",
-        ),
-        pytest.param(
-            "in-use-item-category",
-            {
-                "type": "/problems/in-use/item-category",
-                "title": "Linked to an active item category",
-                "status": 409,
-                "detail": "The record is linked to an active item category, so it"
-                " can't be deleted.",
-            },
-            id="linked to an active item category",
-        ),
-        pytest.param(
-            "archived",
-            ARCHIVED_PROBLEM,
-            id="archived",
-        ),
-        pytest.param(
-            "type-change",
-            {
-                "type": "/problems/validation",
-                "title": "Validation failed",
-                "status": 422,
-                "detail": "The request isn't valid; see errors for each problem.",
-                "errors": [
-                    {
-                        "detail": "A transaction category's type can't be changed.",
-                        "pointer": "/type",
-                    }
-                ],
-            },
-            id="type change",
-        ),
-    ],
-)
-def test_domain_error_returns_its_problem(
-    probe_client: TestClient, kind: str, expected: dict[str, Any]
-) -> None:
-    response = probe_client.post("/api/v1/test/domain-error", params={"kind": kind})
-    problem_body = assert_problem(response, expected["status"])
-    assert problem_body == expected

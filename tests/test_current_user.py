@@ -18,6 +18,11 @@ from app.core.errors import ArchivedError
 from app.repositories.users import SQLUserRepository, User, UserRepository
 from app.services.users import get_user
 
+# ====================
+# |   Probe routes   |
+# ====================
+
+
 ORIGIN = "http://frontend.test"
 WRITTEN_USER_ID = UUID("00000000-0000-7000-8000-0000000000c1")
 
@@ -33,6 +38,11 @@ def whoami(user: CurrentUserDep) -> dict[str, str]:
 def write_then_refuse(connection: ConnectionDep) -> None:
     SQLUserRepository(connection).create(WRITTEN_USER_ID, "Written")
     raise ArchivedError
+
+
+# ============================
+# |   Helpers and fixtures   |
+# ============================
 
 
 @pytest.fixture
@@ -52,6 +62,11 @@ def probe_client(
     with TestClient(make_app()) as client:
         yield client
     get_settings.cache_clear()
+
+
+# ===========================
+# |   With the dummy user   |
+# ===========================
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -84,6 +99,23 @@ def test_endpoints_that_dont_ask_for_the_user_still_succeed(
     assert probe_client.get("/api/v1/test/open").status_code == 200
 
 
+@pytest.mark.usefixtures("dummy_user")
+def test_a_refused_request_keeps_none_of_its_writes(
+    probe_client: TestClient, connection: Connection
+) -> None:
+    response = probe_client.post("/api/v1/test/write-then-refuse")
+    assert_problem(response, 409)
+    written = count(
+        connection, "SELECT count(*) FROM users WHERE id = :id", id=WRITTEN_USER_ID
+    )
+    assert written == 0
+
+
+# ==============================
+# |   Without the dummy user   |
+# ==============================
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
@@ -103,22 +135,15 @@ def test_requests_return_forbidden_problem_without_the_dummy_user(
     assert "has the database been seeded?" in caplog.text
 
 
-@pytest.mark.usefixtures("dummy_user")
-def test_a_refused_request_keeps_none_of_its_writes(
-    probe_client: TestClient, connection: Connection
-) -> None:
-    response = probe_client.post("/api/v1/test/write-then-refuse")
-    assert_problem(response, 409)
-    written = count(
-        connection, "SELECT count(*) FROM users WHERE id = :id", id=WRITTEN_USER_ID
-    )
-    assert written == 0
-
-
 def test_forbidden_problem_carries_cors_headers(probe_client: TestClient) -> None:
     response = probe_client.get("/api/v1/test/open", headers={"Origin": ORIGIN})
     assert response.status_code == 403
     assert response.headers["access-control-allow-origin"] == ORIGIN
+
+
+# =================================
+# |   Outside the versioned API   |
+# =================================
 
 
 def test_health_endpoints_dont_need_the_dummy_user(probe_client: TestClient) -> None:
