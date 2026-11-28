@@ -83,7 +83,7 @@
 
 - Don't commit or push unless asked. Approving the message for a new commit counts as asking to commit it, unless the maintainer says otherwise.
 - Never commit on `main`, `staging` or `production`. Commit on a development branch: the existing one when the work is related, a new one for a separate issue. Branching rules are in the "Git workflow" section of `docs/DESIGN.md`.
-- Name branches in snake_case, such as `fix_script_import_sorting`. Create them from an up-to-date `origin/main`, or from an unmerged branch the work depends on.
+- Name branches in snake_case, such as `fix_script_import_sorting`. Create them from an up-to-date `origin/main` without tracking it, or from an unmerged branch the work depends on.
 - Commit messages must be approved by the maintainer before they are committed, unless they follow one of the approved patterns below. A message that follows an approved pattern needs no approval, so it is committed only when asked.
   - `Update changelog for X`, where X names what the new entries cover, with no body other than the `Co-Authored-By` trailer, for commits that only change `CHANGELOG.md`. The subject-line rules below still apply.
 - Never change the code in a commit that already exists, including local, unpushed ones, without the maintainer approving that code first. This covers rebase, cherry-pick and merge conflict resolutions, fixes needed after a rebase, fixups, amends and squashes. When a rebase, cherry-pick, merge, fixup, amend or squash hits a conflict or needs a fix: stop, show the proposed code as a diff, and wait for approval before continuing. Before dropping or reordering commits, ask for approval and wait for it. Rewording a message is covered by the commit message rule above.
