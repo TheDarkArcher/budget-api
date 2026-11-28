@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
-from problems import assert_problem, without_error_details
+from problems import assert_problem, body_validation_problem, without_error_details
 
 from app.schemas.base import ApiModel
 from app.schemas.fields import DecimalString, Name, Reference
@@ -42,16 +42,6 @@ def list_references() -> list[ProbeReference]:
         ProbeReference(id=ACTIVE_ID, name="Corner Store", archived_at=None),
         ProbeReference(id=ARCHIVED_ID, name="Old Market", archived_at=ARCHIVED_AT),
     ]
-
-
-def validation_problem(pointer: str) -> dict[str, Any]:
-    return {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"pointer": pointer}],
-    }
 
 
 @pytest.fixture
@@ -94,16 +84,18 @@ def test_name_outside_its_length_after_trimming_is_rejected(
         "/api/v1/test/fields", json={**VALID_BODY, "name": sent}
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == validation_problem("/name")
+    assert without_error_details(problem_body) == body_validation_problem("/name")
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_name_with_a_nul_character_is_rejected(probe_client: TestClient) -> None:
+def test_name_with_a_nul_character_is_rejected(
+    probe_client: TestClient,
+) -> None:
     response = probe_client.post(
         "/api/v1/test/fields", json={**VALID_BODY, "name": "Corner\x00Store"}
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == validation_problem("/name")
+    assert without_error_details(problem_body) == body_validation_problem("/name")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -168,7 +160,7 @@ def test_decimal_that_is_not_a_plain_decimal_string_is_rejected(
         "/api/v1/test/fields", json={**VALID_BODY, "value": sent}
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == validation_problem("/value")
+    assert without_error_details(problem_body) == body_validation_problem("/value")
 
 
 @pytest.mark.usefixtures("dummy_user")

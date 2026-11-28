@@ -11,7 +11,18 @@ import httpx2
 import pytest
 from fastapi import APIRouter, FastAPI, Query, Response
 from fastapi.testclient import TestClient
-from problems import assert_problem, without_error_details
+from problems import (
+    ARCHIVED_PROBLEM,
+    FORBIDDEN_PROBLEM,
+    IN_USE_TRANSACTION_PROBLEM,
+    INTERNAL_ERROR_PROBLEM,
+    NOT_FOUND_PROBLEM,
+    assert_exception_logged,
+    assert_problem,
+    body_validation_problem,
+    parameter_validation_problem,
+    without_error_details,
+)
 
 from app.api.dependencies import IdempotentCreateDep
 from app.api.idempotency import NewRecord
@@ -167,12 +178,7 @@ def probe_client(
 def test_unknown_path_is_a_not_found_problem(probe_client: TestClient) -> None:
     response = probe_client.get("/api/v1/test/unknown")
     problem_body = assert_problem(response, 404)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Not Found",
-        "status": 404,
-        "detail": "Not Found",
-    }
+    assert problem_body == NOT_FOUND_PROBLEM
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -199,13 +205,9 @@ def test_invalid_body_is_a_validation_problem_with_pointers(
         json={"pageSize": "many", "sizes": [{"unitName": "g"}, {"unitName": 1}]},
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"pointer": "/pageSize"}, {"pointer": "/sizes/1/unitName"}],
-    }
+    assert without_error_details(problem_body) == body_validation_problem(
+        "/pageSize", "/sizes/1/unitName"
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -218,13 +220,7 @@ def test_malformed_json_body_points_at_the_whole_body(
         headers={"Content-Type": "application/json"},
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"pointer": ""}],
-    }
+    assert without_error_details(problem_body) == body_validation_problem("")
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -238,13 +234,9 @@ def test_invalid_parameters_are_named_in_the_validation_problem(
         headers={"Idempotency-Key": "k" * 256},
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"parameter": "Idempotency-Key"}, {"parameter": "pageSize"}],
-    }
+    assert without_error_details(problem_body) == parameter_validation_problem(
+        "Idempotency-Key", "pageSize"
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -254,18 +246,10 @@ def test_unexpected_error_is_a_logged_problem_without_internals(
     with caplog.at_level(logging.ERROR):
         response = probe_client.get("/api/v1/test/fail")
     problem_body = assert_problem(response, 500)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Internal Server Error",
-        "status": 500,
-        "detail": "An unexpected error occurred.",
-    }
+    assert problem_body == INTERNAL_ERROR_PROBLEM
     assert "secret" not in response.text
     assert "Traceback" not in response.text
-    assert any(
-        record.exc_info is not None and INTERNAL_DETAIL in str(record.exc_info[1])
-        for record in caplog.records
-    )
+    assert_exception_logged(caplog, INTERNAL_DETAIL)
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -307,12 +291,7 @@ def test_malformed_path_id_returns_not_found_problem(probe_client: TestClient) -
         json={"pageSize": 1, "sizes": []},
     )
     problem_body = assert_problem(response, 404)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Not Found",
-        "status": 404,
-        "detail": "Not Found",
-    }
+    assert problem_body == NOT_FOUND_PROBLEM
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -321,12 +300,7 @@ def test_malformed_path_id_returns_not_found_problem_even_if_the_body_is_invalid
 ) -> None:
     response = probe_client.put("/api/v1/test/things/not-an-id", json={})
     problem_body = assert_problem(response, 404)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Not Found",
-        "status": 404,
-        "detail": "Not Found",
-    }
+    assert problem_body == NOT_FOUND_PROBLEM
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -335,13 +309,9 @@ def test_well_formed_path_id_still_gets_body_validation(
 ) -> None:
     response = probe_client.put(f"/api/v1/test/things/{THING_ID}", json={})
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"pointer": "/pageSize"}, {"pointer": "/sizes"}],
-    }
+    assert without_error_details(problem_body) == body_validation_problem(
+        "/pageSize", "/sizes"
+    )
 
 
 @pytest.mark.parametrize(
@@ -378,12 +348,7 @@ def test_missing_current_user_returns_forbidden_problem_even_if_the_request_is_i
 ) -> None:
     response = probe_client.request(method, path, **request_options)
     problem_body = assert_problem(response, 403)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Forbidden",
-        "status": 403,
-        "detail": "Not authorised",
-    }
+    assert problem_body == FORBIDDEN_PROBLEM
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -395,13 +360,9 @@ def test_invalid_request_returns_validation_problem_even_if_its_key_was_used(
         "/api/v1/test/things", json={}, headers={"Idempotency-Key": "key"}
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"pointer": "/pageSize"}, {"pointer": "/sizes"}],
-    }
+    assert without_error_details(problem_body) == body_validation_problem(
+        "/pageSize", "/sizes"
+    )
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -439,13 +400,7 @@ def test_reused_key_returns_mismatch_problem_even_if_the_create_would_be_refused
     [
         pytest.param(
             "in-use-transaction",
-            {
-                "type": "/problems/in-use/transaction",
-                "title": "In use by a transaction",
-                "status": 409,
-                "detail": "A transaction uses the record, so it can't be deleted;"
-                " archive it instead.",
-            },
+            IN_USE_TRANSACTION_PROBLEM,
             id="in use by a transaction",
         ),
         pytest.param(
@@ -472,12 +427,7 @@ def test_reused_key_returns_mismatch_problem_even_if_the_create_would_be_refused
         ),
         pytest.param(
             "archived",
-            {
-                "type": "/problems/archived",
-                "title": "Record archived",
-                "status": 409,
-                "detail": "The record is archived; unarchive it before changing it.",
-            },
+            ARCHIVED_PROBLEM,
             id="archived",
         ),
         pytest.param(

@@ -8,7 +8,13 @@ import pytest
 from fastapi import APIRouter, FastAPI, Query
 from fastapi.routing import iter_route_contexts
 from fastapi.testclient import TestClient
-from problems import assert_problem, without_error_details
+from problems import (
+    NOT_FOUND_PROBLEM,
+    VALIDATION_PROBLEM,
+    assert_problem,
+    parameter_validation_problem,
+    without_error_details,
+)
 from pydantic import Field
 
 from app.api import v1
@@ -32,16 +38,6 @@ def list_things(
 
 def get_thing(thing_id: UUID, size: int = 1) -> dict[str, bool]:
     return {"ok": True}
-
-
-def validation_problem(*parameters: str) -> dict[str, Any]:
-    return {
-        "type": "/problems/validation",
-        "title": "Validation failed",
-        "status": 422,
-        "detail": "The request isn't valid; see errors for each problem.",
-        "errors": [{"parameter": parameter} for parameter in parameters],
-    }
 
 
 @pytest.fixture
@@ -70,7 +66,7 @@ def test_parameter_sent_twice_is_rejected(
     response = probe_client.get(f"/api/v1/test/things?{query}")
     problem_body = assert_problem(response, 422)
     assert problem_body == {
-        **validation_problem(),
+        **VALIDATION_PROBLEM,
         "errors": [
             {"detail": "Send this parameter only once.", "parameter": parameter}
         ],
@@ -85,7 +81,7 @@ def test_parameter_sent_twice_is_reported_with_the_other_errors(
         "/api/v1/test/things?page=1&page=1&pageSize=0&categoryId=not-an-id"
     )
     problem_body = assert_problem(response, 422)
-    assert without_error_details(problem_body) == validation_problem(
+    assert without_error_details(problem_body) == parameter_validation_problem(
         "page", "pageSize", "categoryId"
     )
 
@@ -108,12 +104,7 @@ def test_malformed_path_id_returns_not_found_problem_even_if_a_parameter_is_sent
 ) -> None:
     response = probe_client.get("/api/v1/test/things/not-an-id?size=1&size=2")
     problem_body = assert_problem(response, 404)
-    assert problem_body == {
-        "type": "about:blank",
-        "title": "Not Found",
-        "status": 404,
-        "detail": "Not Found",
-    }
+    assert problem_body == NOT_FOUND_PROBLEM
 
 
 def test_every_v1_route_rejects_parameters_sent_twice() -> None:

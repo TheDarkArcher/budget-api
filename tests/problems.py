@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pytest
 from httpx2 import Response
 
 PROBLEM_JSON = "application/problem+json"
@@ -12,12 +13,34 @@ NOT_FOUND_PROBLEM = {
     "status": 404,
     "detail": "Not Found",
 }
+# The body of every 403, sent when there is no current user.
+FORBIDDEN_PROBLEM = {
+    "type": "about:blank",
+    "title": "Forbidden",
+    "status": 403,
+    "detail": "Not authorised",
+}
+# The body of every 500, whatever went wrong.
+INTERNAL_ERROR_PROBLEM = {
+    "type": "about:blank",
+    "title": "Internal Server Error",
+    "status": 500,
+    "detail": "An unexpected error occurred.",
+}
 # The body of every 409 for changing an archived record, whatever the resource.
 ARCHIVED_PROBLEM = {
     "type": "/problems/archived",
     "title": "Record archived",
     "status": 409,
     "detail": "The record is archived; unarchive it before changing it.",
+}
+# The body of every 409 for deleting a record a transaction uses.
+IN_USE_TRANSACTION_PROBLEM = {
+    "type": "/problems/in-use/transaction",
+    "title": "In use by a transaction",
+    "status": 409,
+    "detail": "A transaction uses the record, so it can't be deleted;"
+    " archive it instead.",
 }
 # The body of every validation problem, apart from its errors entries.
 VALIDATION_PROBLEM = {
@@ -62,3 +85,11 @@ def parameter_validation_problem(*parameters: str) -> dict[str, Any]:
         **VALIDATION_PROBLEM,
         "errors": [{"parameter": parameter} for parameter in parameters],
     }
+
+
+def assert_exception_logged(caplog: pytest.LogCaptureFixture, text: str) -> None:
+    """Check a log record carries an exception whose message contains ``text``."""
+    assert any(
+        record.exc_info is not None and text in str(record.exc_info[1])
+        for record in caplog.records
+    )
