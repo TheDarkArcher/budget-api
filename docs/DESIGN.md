@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Version 1 Design |
-| **Last updated** | 2026-11-28 |
+| **Last updated** | 2026-11-29 |
 
 ---
 
@@ -366,7 +366,12 @@ At the root, outside `/api/v1`, and designed for use by a load balancer or orche
 | GET | `/health/live` | Checks if the process responds. Does not check any subsystems, so a database outage never restarts the app |
 | GET | `/health/ready` | Checks the health of each subsystem. 200 when all pass, 503 when any fail. Both return the same health body, with any failing check marked, rather than a problem |
 
-Each readiness check has a 2-second deadline, enforced by a `connect_timeout` on the connection and a `statement_timeout` on the check query.
+- **Readiness checks:**
+  - Each check has a 2-second deadline, enforced by a `connect_timeout` on the connection and a `statement_timeout` on the check query.
+  - The checks run concurrently.
+  - A failing check is reported with its error and latency.
+  - A check that runs out of time reports `Timed out` with its latency, or `Database unavailable` when the database's own timeouts end it first.
+  - A check still running from an earlier request is the one exception: it isn't started again, and the new request reports it as `Timed out` with no latency.
 
 ### 8.5 Example: Create a Transaction
 
@@ -468,8 +473,10 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 | 204 | Successful delete |
 | 403 | No current user |
 | 404 | Not found, **including another user's records** (never reveals they exist), or a malformed id in the path |
+| 405 | A method the path doesn't support, with an `Allow` header listing the ones it does |
 | 409 | Any 409 problem type in [Errors](#89-errors) |
 | 422 | Any 422 problem type in [Errors](#89-errors) |
+| 500 | An unexpected error, as a problem that gives no internal details |
 
 ### 8.9 Errors
 - **Format:** errors use RFC 9457 `application/problem+json`: `type`, `title`, `status`, `detail`, plus an `errors` array of field-level problems. Each `errors` entry has a `detail` and either a `pointer`, a JSON Pointer into the body such as `/lines/1/itemSizeId`, or a `parameter`, naming a query or header parameter. A failing [readiness check](#84-health) is the exception: it returns the health body, not a problem.
@@ -510,10 +517,12 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
   - Every operation has a short, sentence-case `summary` that reads as its `operationId` in words, such as "List payees".
   - A summary for a single record takes an article, such as "Create a payee" and "Get the current user".
 - **Descriptions:** operation and field descriptions are written for clients, without docstring sections such as `Args:`.
+- **Parameters:** each parameter's schema carries the limits it can express, such as lengths, ranges and allowed values. Limits it can't express, such as no NUL character or a length counted after trimming, are in its description, and the `Idempotency-Key` description says how long a key lasts.
 - **Problem schemas:**
   - Every named problem type in [Errors](#89-errors) has a schema in which `type` is a constant of that problem type.
   - A problem type with extension members, such as `existing`, has a schema for each resource that returns it.
   - Each operation's response for a status references the schema of the one problem type the operation can return with that status. When the operation can return several problem types with that status, the response lists their schemas in a `oneOf` with a `discriminator` on `type`.
+  - 405 and 500 can come from any operation, so operations don't document them.
 
 | Method and path | Operation id | Example |
 |---|---|---|
@@ -530,8 +539,11 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 
 ### 9.1 Testing (pytest)
 - **Service tests:** unit tests of the business rules in the service layer, with fake implementations of the data-access interfaces so no database is needed. The rules they cover are defined in [Domain Rules](#4-domain-rules).
-- **API and integration tests:** run FastAPI's test client against a **real PostgreSQL 18** started by testcontainers, with Alembic migrations applied. Each test runs in an outer transaction that is rolled back. Service transactions run as savepoints inside it, so their commits are rolled back too.
+- **API and integration tests:** run against a **real PostgreSQL 18** started by testcontainers, with Alembic migrations applied. API tests send requests through FastAPI's test client; integration tests call the part under test directly on the test's connection. Each test runs in an outer transaction that is rolled back. Service transactions run as savepoints inside it, so their commits are rolled back too.
+- **Data-access tests:** cover the data-access layer's own work, such as paging, sorting and translating refused writes into domain errors, against the same database in the rolled-back transaction.
 - **Database-constraint tests:** cover the rules the database itself enforces, as listed in [Decisions](#72-decisions).
+- **Concurrency tests:** unlike the tests above, a test of how concurrent database transactions interact commits its setup outside the rolled-back transaction, so the other connections can see it, and deletes what it committed when it finishes.
+- **Script tests:** run the scripts against what they work on: scratch databases in the tests' PostgreSQL container, or a temporary git repository.
 - **Migration round-trip test:** an upgrade to head, a downgrade to base, then another upgrade.
 - **Regression tests:** every bug fix comes with a test that fails before the fix and passes after it, so the bug can't come back, even when this document doesn't state the behaviour. The test is the kind above that covers the layer where the bug was, marked with `@pytest.mark.regression` and a one-line comment describing the bug, with its issue number if there is one, so `pytest -m regression` finds them all.
 
@@ -590,7 +602,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
   | Promoted to `production` | `X.Y.Z`, from tag `vX.Y.Z` | `0.2.0` |
 
   - The image is built once per commit and promoted by adding tags, never rebuilt, so production runs the image that was verified on staging.
-  - The dev label is computed at build time from `git describe` (`uv run poe build-label`) and passed into the image as the `APP_BUILD` build argument; `/health` endpoints report it as `build` alongside `version`. Docker image tags can't contain `+`, so image tags use `_` in its place (e.g. `budget-api:0.2.0-dev.47_1a2b3c4`). The committed `openapi.json` keeps the plain version so the drift check doesn't change on every commit, while the schema a running app serves at `/openapi.json` reports the build label as its version.
+  - The dev label is computed at build time from `git describe` (`uv run poe build-label`) and passed into the image as the `APP_BUILD` build argument; `/health` endpoints report it as `build` alongside `version`, and leave `build` out when no label is set. Docker image tags can't contain `+`, so image tags use `_` in its place (e.g. `budget-api:0.2.0-dev.47_1a2b3c4`). The committed `openapi.json` keeps the plain version so the drift check doesn't change on every commit, while the schema a running app serves at `/openapi.json` reports the build label as its version.
 - **Release process:**
   1. A `Release X.Y.Z` pull request on `main` sets the version in `pyproject.toml`, re-exports `openapi.json` and moves the changelog's `Unreleased` section under the new version and date.
   2. `main` is promoted to `staging` and the commit is tagged `vX.Y.Z-rc.N`. A fix found on staging goes to `main` and is promoted again as the next release candidate.
@@ -606,8 +618,20 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 - **Seeding:** `provision_user()` creates a user's default transaction categories, item categories and the links between them. The Milestone 1 seed script calls it for the dummy user; Milestone 3 registration reuses it.
 
 ### 9.7 Backups
-- **Backup:** `uv run poe backup` runs `pg_dump -Fc` and writes `backups/db_backup_<timestamp>.dump`. The `backups/` folder is git-ignored. The timestamp uses the ISO 8601 basic format (`yyyymmddTHHMMSS`).
-- **Restore:** `uv run poe restore <file>` loads the named dump into the database. It refuses to overwrite an existing database that isn't empty unless `-f` or `--force` is given. An existing database that isn't empty is set aside while restoring and put back if the restore fails; an empty one is dropped, and recreated empty if the restore fails.
+- **Backup:**
+  - `uv run poe backup` runs `pg_dump -Fc` and writes `backups/db_backup_<timestamp>.dump`. The timestamp uses the ISO 8601 basic format (`yyyymmddTHHMMSS`).
+  - The `backups/` folder is git-ignored.
+  - A dump is readable only by its owner, and a backup never overwrites an existing dump.
+  - A backup that fails or is interrupted leaves no file.
+- **Restore:**
+  - `uv run poe restore <file>` loads the named dump into the database.
+  - A file that can't be opened, or isn't a dump, is refused without changing anything.
+  - It refuses to overwrite an existing database that isn't empty unless `-f` or `--force` is given.
+  - An existing database that isn't empty is set aside while restoring and put back if the restore fails; an empty one is dropped, and recreated empty if the restore fails.
+  - An interrupted restore is undone the same way as a failed one.
+  - If putting the original database back fails, the error names the database that holds it. If recreating an empty database fails, the error says no data was lost.
+  - If dropping the set-aside copy fails after a successful restore, the restore still succeeds and leaves the copy in place.
+  - A database whose set-aside name would be too long for PostgreSQL is refused, unless it is empty and so is dropped rather than set aside.
 - **Stopping the app:** required before a restore; a restore refuses while anything is connected to the database.
 - **Documentation:** the README documents both and recommends backing up regularly.
 
