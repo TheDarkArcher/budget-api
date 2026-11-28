@@ -544,6 +544,7 @@ The 201 response holds the full transaction, as `GET /transactions/{transactionI
 - **Database-constraint tests:** cover the rules the database itself enforces, as listed in [Decisions](#72-decisions).
 - **Concurrency tests:** unlike the tests above, a test of how concurrent database transactions interact commits its setup outside the rolled-back transaction, so the other connections can see it, and deletes what it committed when it finishes.
 - **Script tests:** run the scripts against what they work on: scratch databases in the tests' PostgreSQL container, or a temporary git repository.
+- **Document tests:** check the committed `openapi.json` against [API Design](#8-api-design) conventions, such as its operation ids, descriptions and declared responses, without starting the app.
 - **Migration round-trip test:** an upgrade to head, a downgrade to base, then another upgrade.
 - **Regression tests:** every bug fix comes with a test that fails before the fix and passes after it, so the bug can't come back, even when this document doesn't state the behaviour. The test is the kind above that covers the layer where the bug was, marked with `@pytest.mark.regression` and a one-line comment describing the bug, with its issue number if there is one, so `pytest -m regression` finds them all.
 

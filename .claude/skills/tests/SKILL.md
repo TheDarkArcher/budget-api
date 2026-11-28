@@ -10,6 +10,7 @@ What to test, and how regression tests are written, is set by the Tests section 
 ## What to test
 - Before writing a test, name the rule in `docs/DESIGN.md` it covers and the layer that enforces it: the rule's *Enforced in* note, or for a rule without one, the layer its section describes. If no rule covers the behaviour, leave the test out, or ask whether the design should state it.
 - Test each rule in the layer that enforces it, with the kind of test the Testing section describes for that layer, covering only what that layer decides.
+- A guard test adds to the tests of a rule in `docs/DESIGN.md` by covering the data that supplies the rule, such as the default categories. It makes a mistake in that data, such as a misspelt entry, fail loudly instead of passing unnoticed. It either checks the data itself, or feeds the code a mistaken entry and checks that it raises an error. The rule's own tests still check that the rule holds.
 - Apply the same check to a suggestion, from a reviewer or anyone else, to add coverage.
 - Write a regression test as the Regression tests entry in the Testing section describes. Put the mark on the test, since pytest ignores marks on fixtures.
 
