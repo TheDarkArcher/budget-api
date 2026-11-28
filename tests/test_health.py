@@ -3,6 +3,7 @@
 import threading
 import time
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +25,20 @@ def use_checks(app: FastAPI, checks: dict[str, HealthCheck]) -> None:
         return checks
 
     app.dependency_overrides[get_health_checks] = override
+
+
+def without_latency(body: dict[str, Any]) -> dict[str, Any]:
+    """Assert every check has a latency and return the body without them.
+
+    Latencies vary from run to run, so tests compare the rest of the body.
+    """
+    checks = {}
+    for name, check in body["checks"].items():
+        assert isinstance(check.get("latencyMs"), int)
+        checks[name] = {
+            key: value for key, value in check.items() if key != "latencyMs"
+        }
+    return {**body, "checks": checks}
 
 
 def check_threads(name: str) -> list[threading.Thread]:
@@ -85,46 +100,62 @@ def test_live(client: TestClient) -> None:
     assert response.json() == {"status": "ok", "version": __version__}
 
 
-@pytest.mark.usefixtures("database_down")
+@pytest.mark.usefixtures("database_down", "no_build")
 def test_live_when_database_is_down(client: TestClient) -> None:
-    assert client.get("/health/live").status_code == 200
+    response = client.get("/health/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "version": __version__}
 
 
 def test_health_reports_build_label_when_set(client: TestClient, build: str) -> None:
-    assert client.get("/health/live").json()["build"] == build
-    assert client.get("/health/ready").json()["build"] == build
+    live = client.get("/health/live").json()
+    ready = client.get("/health/ready").json()
+    assert live == {"status": "ok", "version": __version__, "build": build}
+    assert without_latency(ready) == {
+        "status": "ok",
+        "version": __version__,
+        "build": build,
+        "checks": {"database": {"status": "ok"}},
+    }
 
 
 @pytest.mark.usefixtures("no_build")
 def test_health_omits_build_label_when_unset(client: TestClient) -> None:
-    assert "build" not in client.get("/health/live").json()
-    assert "build" not in client.get("/health/ready").json()
+    live = client.get("/health/live").json()
+    ready = client.get("/health/ready").json()
+    assert live == {"status": "ok", "version": __version__}
+    assert without_latency(ready) == {
+        "status": "ok",
+        "version": __version__,
+        "checks": {"database": {"status": "ok"}},
+    }
 
 
+@pytest.mark.usefixtures("no_build")
 def test_ready_when_database_is_up(client: TestClient) -> None:
     response = client.get("/health/ready")
     assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "ok"
-    assert body["checks"]["database"]["status"] == "ok"
-    assert isinstance(body["checks"]["database"]["latencyMs"], int)
-    assert "error" not in body["checks"]["database"]
+    assert without_latency(response.json()) == {
+        "status": "ok",
+        "version": __version__,
+        "checks": {"database": {"status": "ok"}},
+    }
 
 
-@pytest.mark.usefixtures("database_down")
+@pytest.mark.usefixtures("database_down", "no_build")
 def test_ready_when_database_is_down(client: TestClient) -> None:
     response = client.get("/health/ready")
     assert response.status_code == 503
-    body = response.json()
-    assert body["status"] == "error"
-    assert body["version"] == __version__
-    database = body["checks"]["database"]
-    assert database["status"] == "error"
-    assert database["error"] == "Database unavailable"
+    assert without_latency(response.json()) == {
+        "status": "error",
+        "version": __version__,
+        "checks": {"database": {"status": "error", "error": "Database unavailable"}},
+    }
     assert "secret" not in response.text
     assert "127.0.0.1" not in response.text
 
 
+@pytest.mark.usefixtures("no_build")
 def test_ready_reports_each_check_when_one_fails(
     app: FastAPI, client: TestClient
 ) -> None:
@@ -134,13 +165,17 @@ def test_ready_reports_each_check_when_one_fails(
     use_checks(app, {"passes": lambda: None, "fails": fails})
     response = client.get("/health/ready")
     assert response.status_code == 503
-    checks = response.json()["checks"]
-    assert checks["passes"]["status"] == "ok"
-    assert checks["fails"]["status"] == "error"
-    assert checks["fails"]["error"] == "Cache unavailable"
+    assert without_latency(response.json()) == {
+        "status": "error",
+        "version": __version__,
+        "checks": {
+            "passes": {"status": "ok"},
+            "fails": {"status": "error", "error": "Cache unavailable"},
+        },
+    }
 
 
-@pytest.mark.usefixtures("short_timeout")
+@pytest.mark.usefixtures("short_timeout", "no_build")
 def test_ready_when_check_hangs(
     app: FastAPI, client: TestClient, release: threading.Event
 ) -> None:
@@ -153,14 +188,23 @@ def test_ready_when_check_hangs(
     response = client.get("/health/ready")
     assert time.perf_counter() - start < TIMEOUT_SECONDS + 0.5
     assert response.status_code == 503
-    assert response.json()["checks"]["hangs"]["error"] == "Timed out"
+    assert without_latency(response.json()) == {
+        "status": "error",
+        "version": __version__,
+        "checks": {"hangs": {"status": "error", "error": "Timed out"}},
+    }
     assert len(check_threads("hangs")) == 1
 
     start = time.perf_counter()
     response = client.get("/health/ready")
     assert time.perf_counter() - start < TIMEOUT_SECONDS
     assert response.status_code == 503
-    assert response.json()["checks"]["hangs"]["error"] == "Timed out"
+    # Still running from the first request, so it has no latency of its own.
+    assert response.json() == {
+        "status": "error",
+        "version": __version__,
+        "checks": {"hangs": {"status": "error", "error": "Timed out"}},
+    }
     assert len(check_threads("hangs")) == 1
 
     release.set()
