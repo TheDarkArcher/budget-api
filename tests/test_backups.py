@@ -26,7 +26,10 @@ from backups import (
 )
 
 DATABASE = "backup_scratch"
-OLD_ASIDE = "backup_scratch_before_restore_20000101T000000"
+OLD_ASIDE = f"{DATABASE}_before_restore_20000101T000000"
+# The time tests fix the script's timestamp to, and the set-aside name it gives.
+TIMESTAMP = "20261111T143000"
+NEW_ASIDE = f"{DATABASE}_before_restore_{TIMESTAMP}"
 # Every scratch database these tests create starts with DATABASE.
 SCRATCH_DATABASES = r"backup\_scratch%"
 
@@ -80,6 +83,30 @@ def container_command(
         f"POSTGRES_DB={database}",
         container_id,
     )
+
+
+def interrupt(*args: object, **kwargs: object) -> str:
+    raise KeyboardInterrupt
+
+
+def fail_psql(
+    monkeypatch: pytest.MonkeyPatch, prefix: str, error: BaseException
+) -> None:
+    # Runs psql for real, except a statement starting with `prefix`, which
+    # raises `error` instead.
+    real_psql = backups._psql
+
+    def failing_psql(sql: str, **variables: str) -> str:
+        if sql.startswith(prefix):
+            raise error
+        return real_psql(sql, **variables)
+
+    monkeypatch.setattr(backups, "_psql", failing_psql)
+
+
+def drop_scratch(admin: Engine) -> None:
+    with admin.connect() as connection:
+        connection.execute(text("DROP DATABASE backup_scratch"))
 
 
 def make_restores_fail(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,9 +258,6 @@ def test_a_failed_backup_leaves_no_file(
 def test_an_interrupted_backup_leaves_no_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def interrupt(*args: object, **kwargs: object) -> str:
-        raise KeyboardInterrupt
-
     monkeypatch.setattr(backups, "_run", interrupt)
     with pytest.raises(KeyboardInterrupt):
         backup()
@@ -244,7 +268,7 @@ def test_an_interrupted_backup_leaves_no_file(
 def test_a_second_backup_in_the_same_second_keeps_the_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(backups, "_timestamp", lambda: "20261111T143000")
+    monkeypatch.setattr(backups, "_timestamp", lambda: TIMESTAMP)
     first = backup()
     size = first.stat().st_size
     with pytest.raises(FileExistsError):
@@ -255,8 +279,7 @@ def test_a_second_backup_in_the_same_second_keeps_the_first(
 def test_restores_into_a_missing_database(
     dump: Path, scratch: Engine, admin: Engine
 ) -> None:
-    with admin.connect() as connection:
-        connection.execute(text("DROP DATABASE backup_scratch"))
+    drop_scratch(admin)
     assert restore(dump) == DATABASE
     assert notes(scratch) == ["original"]
     assert scratch_databases(admin) == [DATABASE]
@@ -336,14 +359,9 @@ def test_a_failed_drop_of_an_empty_database_changes_nothing(
 ) -> None:
     make_empty(scratch)
     oid = database_oid(admin)
-    real_psql = backups._psql
-
-    def failing_drop(sql: str, **variables: str) -> str:
-        if sql == 'DROP DATABASE :"database";':
-            raise DatabaseCommandError("drop failed")
-        return real_psql(sql, **variables)
-
-    monkeypatch.setattr(backups, "_psql", failing_drop)
+    fail_psql(
+        monkeypatch, 'DROP DATABASE :"database";', DatabaseCommandError("drop failed")
+    )
     with pytest.raises(RestoreError, match="Couldn't replace the empty database"):
         restore(dump)
     assert database_oid(admin) == oid
@@ -356,14 +374,7 @@ def test_a_failed_recreate_says_no_data_was_lost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     make_empty(scratch)
-    real_psql = backups._psql
-
-    def failing_create(sql: str, **variables: str) -> str:
-        if sql.startswith("CREATE DATABASE"):
-            raise DatabaseCommandError("create failed")
-        return real_psql(sql, **variables)
-
-    monkeypatch.setattr(backups, "_psql", failing_create)
+    fail_psql(monkeypatch, "CREATE DATABASE", DatabaseCommandError("create failed"))
     make_restores_fail(monkeypatch)
     with pytest.raises(RestoreError, match="was empty, so no data was lost"):
         restore(dump)
@@ -447,7 +458,7 @@ def test_sets_the_database_aside_under_a_timestamped_name(
         connection.execute(
             text('CREATE DATABASE "backup_scratch_before_restore_20000101T000000"')
         )
-    monkeypatch.setattr(backups, "_timestamp", lambda: "20261111T143000")
+    monkeypatch.setattr(backups, "_timestamp", lambda: TIMESTAMP)
     set_aside: list[str] = []
     real_psql = backups._psql
 
@@ -458,7 +469,7 @@ def test_sets_the_database_aside_under_a_timestamped_name(
 
     monkeypatch.setattr(backups, "_psql", recording_psql)
     restore(dump, force=True)
-    assert set(set_aside) == {"backup_scratch_before_restore_20261111T143000"}
+    assert set(set_aside) == {NEW_ASIDE}
     assert notes(scratch) == ["original"]
     assert scratch_databases(admin) == [DATABASE, OLD_ASIDE]
 
@@ -477,8 +488,7 @@ def test_a_failed_restore_keeps_the_original_database(
 def test_a_failed_restore_into_a_missing_database_leaves_nothing(
     dump: Path, admin: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    with admin.connect() as connection:
-        connection.execute(text("DROP DATABASE backup_scratch"))
+    drop_scratch(admin)
     make_restores_fail(monkeypatch)
     with pytest.raises(RestoreError, match="nothing was changed"):
         restore(dump)
@@ -498,20 +508,12 @@ def test_a_failed_undo_says_where_the_original_data_is(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
 ) -> None:
-    monkeypatch.setattr(backups, "_timestamp", lambda: "20261111T143000")
-    real_psql = backups._psql
-
-    def failing_rename_back(sql: str, **variables: str) -> str:
-        if sql.startswith('ALTER DATABASE :"aside"'):
-            raise error
-        return real_psql(sql, **variables)
-
-    monkeypatch.setattr(backups, "_psql", failing_rename_back)
-    aside = "backup_scratch_before_restore_20261111T143000"
+    monkeypatch.setattr(backups, "_timestamp", lambda: TIMESTAMP)
+    fail_psql(monkeypatch, 'ALTER DATABASE :"aside"', error)
     make_restores_fail(monkeypatch)
-    with pytest.raises(RestoreError, match=f'safe in the database "{aside}"'):
+    with pytest.raises(RestoreError, match=f'safe in the database "{NEW_ASIDE}"'):
         restore(dump, force=True)
-    assert scratch_databases(admin) == [aside]
+    assert scratch_databases(admin) == [NEW_ASIDE]
 
 
 def test_refuses_a_name_too_long_to_set_aside(
@@ -558,8 +560,7 @@ def test_an_interrupted_restore_into_a_missing_database_leaves_nothing(
     admin: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with admin.connect() as connection:
-        connection.execute(text("DROP DATABASE backup_scratch"))
+    drop_scratch(admin)
     monkeypatch.setattr(backups, "_run", interrupted_after_restore(backups._run))
     with pytest.raises(KeyboardInterrupt):
         restore(dump)
@@ -572,21 +573,15 @@ def test_an_interrupted_restore_reports_a_failed_undo(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(backups, "_timestamp", lambda: "20261111T143000")
+    monkeypatch.setattr(backups, "_timestamp", lambda: TIMESTAMP)
     monkeypatch.setattr(backups, "_run", interrupted_after_restore(backups._run))
-    real_psql = backups._psql
-
-    def failing_rename_back(sql: str, **variables: str) -> str:
-        if sql.startswith('ALTER DATABASE :"aside"'):
-            raise DatabaseCommandError("rename failed")
-        return real_psql(sql, **variables)
-
-    monkeypatch.setattr(backups, "_psql", failing_rename_back)
-    aside = "backup_scratch_before_restore_20261111T143000"
+    fail_psql(
+        monkeypatch, 'ALTER DATABASE :"aside"', DatabaseCommandError("rename failed")
+    )
     with pytest.raises(KeyboardInterrupt):
         restore(dump, force=True)
-    assert f'safe in the database "{aside}"' in caplog.text
-    assert scratch_databases(admin) == [aside]
+    assert f'safe in the database "{NEW_ASIDE}"' in caplog.text
+    assert scratch_databases(admin) == [NEW_ASIDE]
 
 
 @pytest.mark.parametrize(
@@ -604,23 +599,13 @@ def test_a_failed_clean_up_still_counts_as_restored(
     caplog: pytest.LogCaptureFixture,
     error: Exception,
 ) -> None:
-    monkeypatch.setattr(backups, "_timestamp", lambda: "20261111T143000")
-    real_psql = backups._psql
-
-    def failing_drop_aside(sql: str, **variables: str) -> str:
-        if sql.startswith('DROP DATABASE :"aside"'):
-            raise error
-        return real_psql(sql, **variables)
-
-    monkeypatch.setattr(backups, "_psql", failing_drop_aside)
+    monkeypatch.setattr(backups, "_timestamp", lambda: TIMESTAMP)
+    fail_psql(monkeypatch, 'DROP DATABASE :"aside"', error)
     add_note(scratch, "changed")
     assert restore(dump, force=True) == DATABASE
     assert notes(scratch) == ["original"]
     assert "couldn't drop the set-aside copy" in caplog.text
-    assert scratch_databases(admin) == [
-        DATABASE,
-        "backup_scratch_before_restore_20261111T143000",
-    ]
+    assert scratch_databases(admin) == [DATABASE, NEW_ASIDE]
 
 
 def test_rejects_a_file_that_isnt_a_dump(tmp_path: Path) -> None:
@@ -659,9 +644,6 @@ def test_main_exits_quietly_when_interrupted(
     argv: list[str],
     restore_hint: bool,
 ) -> None:
-    def interrupt(*args: object, **kwargs: object) -> str:
-        raise KeyboardInterrupt
-
     monkeypatch.setattr(backups, argv[0], interrupt)
     caplog.set_level(logging.ERROR)
     assert main(argv) == 130
