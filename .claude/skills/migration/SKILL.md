@@ -13,7 +13,7 @@ The rules are in the Database section of `AGENTS.md`, and the schema decisions a
 - If the change needs a schema decision the design document doesn't cover or conflicts with, ask first, as AGENTS.md requires.
 
 ## 2. Write the tests first
-- Add database-constraint tests to `tests/test_schema.py` for every rule the migration will enforce, following the Tests section of `AGENTS.md`: each constraint and trigger refusing what it should, and the changes the rule says must still be allowed. Use the file's helpers (`fails` with the expected error class, `run`, `one`, `count`) and its `alice` and `bob` fixtures. When a new table needs rows for tests, extend `make_world` and `World` to create them.
+- Add database-constraint tests to `tests/test_schema.py` for every rule the migration will enforce, following the Tests section of `AGENTS.md` and the `tests` skill: each constraint and trigger refusing what it should, and the changes the rule says must still be allowed. Use the file's helpers (`fails` with the expected error class, `run`, `one`, `count`) and its `alice` and `bob` fixtures. When a new table needs rows for tests, extend `make_world` and `World` to create them.
 - Before writing the upgrade, run the new tests directly and see them fail, as CLAUDE.md directs for tests written first.
 - Each refusal test must fail because its constraint or trigger doesn't exist yet, as the Tests section of `AGENTS.md` requires. When the table is new, it fails because the table doesn't exist yet.
 - Tests of changes that must still be allowed on an existing table cover behaviour that already exists, so the fail-first rule doesn't apply to them and they may already pass.
