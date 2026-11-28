@@ -131,7 +131,7 @@ def list_items(
 # ============================
 
 
-def single_page_body(listed: list[str], page_size: int = 25) -> dict[str, Any]:
+def expected_single_page(listed: list[str], page_size: int = 25) -> dict[str, Any]:
     """The body of a list whose records, in order, all fit on one page."""
     return {
         "data": [{"recordName": name} for name in listed],
@@ -223,7 +223,7 @@ def test_last_page_is_full_when_the_total_is_a_multiple_of_the_page_size(
         "/api/v1/test/payees", params={"page": 1, "pageSize": 5}
     )
     assert response.status_code == 200
-    assert response.json() == single_page_body(listed, page_size=5)
+    assert response.json() == expected_single_page(listed, page_size=5)
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -258,7 +258,7 @@ def test_archived_chooses_which_records_are_listed(
 ) -> None:
     response = probe_client.get("/api/v1/test/payees", params={"archived": archived})
     assert response.status_code == 200
-    assert response.json() == single_page_body(listed)
+    assert response.json() == expected_single_page(listed)
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -268,7 +268,7 @@ def test_records_that_are_never_archived_take_no_archived_filter(
     add_tag(connection, DUMMY_USER_ID, "Snack")
     response = probe_client.get("/api/v1/test/tags", params={"archived": "true"})
     assert response.status_code == 200
-    assert response.json() == single_page_body(["Snack"])
+    assert response.json() == expected_single_page(["Snack"])
 
 
 @pytest.mark.usefixtures("dummy_user")
@@ -301,7 +301,7 @@ def test_q_matches_names_that_contain_it(
         add_payee(connection, DUMMY_USER_ID, name)
     response = probe_client.get("/api/v1/test/payees", params={"q": q})
     assert response.status_code == 200
-    assert response.json() == single_page_body(listed)
+    assert response.json() == expected_single_page(listed)
 
 
 @pytest.mark.usefixtures("payees")
@@ -310,7 +310,7 @@ def test_blank_q_is_ignored(probe_client: TestClient, q: str) -> None:
     listed = ["Apple", "banana", "cherry", "Damson", "Elder"]
     response = probe_client.get("/api/v1/test/payees", params={"q": q})
     assert response.status_code == 200
-    assert response.json() == single_page_body(listed)
+    assert response.json() == expected_single_page(listed)
 
 
 # ===============
@@ -325,7 +325,7 @@ def test_order_desc_lists_names_in_reverse(probe_client: TestClient) -> None:
         "/api/v1/test/payees", params={"sort": "name", "order": "desc"}
     )
     assert response.status_code == 200
-    assert response.json() == single_page_body(listed)
+    assert response.json() == expected_single_page(listed)
 
 
 def test_equal_sort_keys_are_ordered_by_id_in_the_same_order(
@@ -372,12 +372,12 @@ def test_order_reverses_every_key_of_a_sort(
             add_item(connection, DUMMY_USER_ID, category_id, item)
     ascending = probe_client.get("/api/v1/test/items", params={"sort": "itemCategory"})
     assert ascending.status_code == 200
-    assert ascending.json() == single_page_body(["Milk", "rice", "Zest"])
+    assert ascending.json() == expected_single_page(["Milk", "rice", "Zest"])
     descending = probe_client.get(
         "/api/v1/test/items", params={"sort": "itemCategory", "order": "desc"}
     )
     assert descending.status_code == 200
-    assert descending.json() == single_page_body(["Zest", "rice", "Milk"])
+    assert descending.json() == expected_single_page(["Zest", "rice", "Milk"])
 
 
 # ==========================
@@ -405,7 +405,7 @@ def test_order_reverses_every_key_of_a_sort(
         ("pageSize", "many"),
     ],
 )
-def test_parameter_outside_its_allowed_values_is_rejected(
+def test_parameter_outside_its_allowed_values_returns_validation_problem(
     probe_client: TestClient, parameter: str, value: str
 ) -> None:
     response = probe_client.get("/api/v1/test/payees", params={parameter: value})
@@ -420,11 +420,11 @@ def test_parameter_outside_its_allowed_values_is_rejected(
 def test_page_size_accepts_its_limits(probe_client: TestClient, page_size: int) -> None:
     response = probe_client.get("/api/v1/test/payees", params={"pageSize": page_size})
     assert response.status_code == 200
-    assert response.json() == single_page_body([], page_size=page_size)
+    assert response.json() == expected_single_page([], page_size=page_size)
 
 
 @pytest.mark.usefixtures("dummy_user")
 def test_snake_case_parameter_name_is_ignored(probe_client: TestClient) -> None:
     response = probe_client.get("/api/v1/test/payees", params={"page_size": 5})
     assert response.status_code == 200
-    assert response.json() == single_page_body([])
+    assert response.json() == expected_single_page([])

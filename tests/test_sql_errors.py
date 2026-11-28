@@ -106,7 +106,7 @@ class Refusals:
     archived_payee: UUID
 
 
-def translated(connection: Connection, sql: str, **params: object) -> DomainError:
+def translated_error(connection: Connection, sql: str, **params: object) -> DomainError:
     with (
         pytest.raises(DomainError) as caught,
         translate_sql_constraint_errors(connection),
@@ -138,7 +138,7 @@ def refusals(connection: Connection, alice: World) -> Refusals:
 def test_duplicate_name_is_a_name_conflict(
     connection: Connection, alice: World, sql: str
 ) -> None:
-    error = translated(connection, sql, **vars(alice))
+    error = translated_error(connection, sql, **vars(alice))
     assert type(error) is NameConflictError
 
 
@@ -152,7 +152,7 @@ def test_refused_delete_is_in_use_by_what_blocks_it(
     blocker: Blocker,
 ) -> None:
     ids = vars(alice) | vars(refusals)
-    error = translated(connection, sql, id=ids[record])
+    error = translated_error(connection, sql, id=ids[record])
     assert isinstance(error, InUseError)
     assert error.blocked_by is blocker
 
@@ -160,7 +160,7 @@ def test_refused_delete_is_in_use_by_what_blocks_it(
 def test_changed_transaction_category_type_is_a_type_change(
     connection: Connection, alice: World
 ) -> None:
-    error = translated(
+    error = translated_error(
         connection,
         "UPDATE transaction_categories SET type = 'income' WHERE id = :id",
         id=alice.category,
@@ -172,7 +172,7 @@ def test_changed_transaction_category_type_is_a_type_change(
 def test_refused_change_while_archived_is_archived(
     connection: Connection, refusals: Refusals, sql: str, record: str
 ) -> None:
-    error = translated(connection, sql, id=vars(refusals)[record])
+    error = translated_error(connection, sql, id=vars(refusals)[record])
     assert type(error) is ArchivedError
 
 
@@ -193,7 +193,7 @@ def test_unmapped_constraint_is_raised_unchanged(
 def test_database_transaction_is_usable_after_a_translated_error(
     connection: Connection, alice: World
 ) -> None:
-    translated(
+    translated_error(
         connection,
         "INSERT INTO payees (user_id, name) VALUES (:user, 'supermarket')",
         user=alice.user,

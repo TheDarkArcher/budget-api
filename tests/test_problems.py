@@ -175,14 +175,14 @@ def probe_client(
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_unknown_path_is_a_not_found_problem(probe_client: TestClient) -> None:
+def test_unknown_path_returns_not_found_problem(probe_client: TestClient) -> None:
     response = probe_client.get("/api/v1/test/unknown")
     problem_body = assert_problem(response, 404)
     assert problem_body == NOT_FOUND_PROBLEM
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_unsupported_method_is_a_problem_that_keeps_allow(
+def test_unsupported_method_returns_method_not_allowed_problem_with_allow(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.delete("/api/v1/test/read-only")
@@ -197,7 +197,7 @@ def test_unsupported_method_is_a_problem_that_keeps_allow(
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_invalid_body_is_a_validation_problem_with_pointers(
+def test_invalid_body_returns_validation_problem_with_pointers(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.post(
@@ -211,7 +211,7 @@ def test_invalid_body_is_a_validation_problem_with_pointers(
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_malformed_json_body_points_at_the_whole_body(
+def test_malformed_json_body_returns_validation_problem_for_the_whole_body(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.post(
@@ -240,7 +240,7 @@ def test_invalid_parameters_are_named_in_the_validation_problem(
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_unexpected_error_is_a_logged_problem_without_internals(
+def test_unexpected_error_returns_internal_error_problem_without_internals(
     probe_client: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.ERROR):
@@ -304,7 +304,7 @@ def test_malformed_path_id_returns_not_found_problem_even_if_the_body_is_invalid
 
 
 @pytest.mark.usefixtures("dummy_user")
-def test_well_formed_path_id_still_gets_body_validation(
+def test_well_formed_path_id_returns_validation_problem_for_the_body(
     probe_client: TestClient,
 ) -> None:
     response = probe_client.put(f"/api/v1/test/things/{THING_ID}", json={})
@@ -448,7 +448,7 @@ def test_reused_key_returns_mismatch_problem_even_if_the_create_would_be_refused
         ),
     ],
 )
-def test_domain_error_is_its_problem(
+def test_domain_error_returns_its_problem(
     probe_client: TestClient, kind: str, expected: dict[str, Any]
 ) -> None:
     response = probe_client.post("/api/v1/test/domain-error", params={"kind": kind})

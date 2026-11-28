@@ -126,7 +126,7 @@ def expected_created_response(
     )
 
 
-def sent(response: Response) -> tuple[int, bytes, str, str]:
+def sent_parts(response: Response) -> tuple[int, bytes, str, str]:
     return (
         response.status_code,
         bytes(response.body),
@@ -297,7 +297,7 @@ def test_request_without_a_key_creates_its_record(
     connection: Connection, user: UUID
 ) -> None:
     response = create_payee(connection, user, key=None)
-    assert sent(response) == expected_created_response(connection, user)
+    assert sent_parts(response) == expected_created_response(connection, user)
 
 
 def test_requests_without_a_key_are_never_repeats(
@@ -318,7 +318,8 @@ def test_repeat_replays_the_original_response_without_creating(
 ) -> None:
     original = create_payee(connection, user)
     repeat = create_payee(connection, user)
-    assert sent(repeat) == sent(original) == expected_created_response(connection, user)
+    assert sent_parts(original) == expected_created_response(connection, user)
+    assert sent_parts(repeat) == sent_parts(original)
 
 
 @pytest.mark.parametrize(
@@ -352,7 +353,7 @@ def test_requests_are_the_same_if_their_bodies_match_after_validation(
 ) -> None:
     first = create_payee(connection, user, PayeeBody.model_validate_json(original))
     second = create_payee(connection, user, PayeeBody.model_validate_json(repeat))
-    assert sent(second) == sent(first)
+    assert sent_parts(second) == sent_parts(first)
 
 
 @pytest.mark.parametrize(
@@ -384,7 +385,7 @@ def test_users_can_use_the_same_key(
 ) -> None:
     create_payee(connection, user)
     response = create_payee(connection, other_user)
-    assert sent(response) == expected_created_response(connection, other_user)
+    assert sent_parts(response) == expected_created_response(connection, other_user)
 
 
 def test_key_sent_with_no_user_is_kept_apart_from_users_keys(
@@ -394,8 +395,8 @@ def test_key_sent_with_no_user_is_kept_apart_from_users_keys(
     creation = idempotent_create(connection, None)
     original = creation.run(BODY, payee_creator(connection, other_user))
     repeat = creation.run(BODY, payee_creator(connection, other_user))
-    assert sent(original) == expected_created_response(connection, other_user)
-    assert sent(repeat) == sent(original)
+    assert sent_parts(original) == expected_created_response(connection, other_user)
+    assert sent_parts(repeat) == sent_parts(original)
 
 
 # ====================
@@ -407,7 +408,7 @@ def test_key_lasts_24_hours(connection: Connection, user: UUID) -> None:
     original = create_payee(connection, user)
     age_key(connection, timedelta(hours=23, minutes=59))
     repeat = create_payee(connection, user)
-    assert sent(repeat) == sent(original)
+    assert sent_parts(repeat) == sent_parts(original)
 
 
 def test_key_can_be_reused_after_24_hours(connection: Connection, user: UUID) -> None:
@@ -415,7 +416,7 @@ def test_key_can_be_reused_after_24_hours(connection: Connection, user: UUID) ->
     age_key(connection, timedelta(hours=24, minutes=1))
     original = create_payee(connection, user, OTHER_BODY)
     repeat = create_payee(connection, user, OTHER_BODY)
-    assert sent(repeat) == sent(original)
+    assert sent_parts(repeat) == sent_parts(original)
     assert payees_count(connection, user) == 2
 
 
@@ -431,7 +432,7 @@ def test_failed_create_is_not_stored(connection: Connection, user: UUID) -> None
     with pytest.raises(NameConflictError), connection.begin_nested():
         idempotent_create(connection, user).run(BODY, fail)
     response = create_payee(connection, user)
-    assert sent(response) == expected_created_response(connection, user)
+    assert sent_parts(response) == expected_created_response(connection, user)
 
 
 # ==========================
@@ -445,8 +446,8 @@ def test_repeat_waits_for_the_first_request_and_replays_its_response(
     with waiting_repeat(engine, committed_user) as (first, original, repeat):
         first.commit()
         replayed = repeat.result(DEADLINE_SECONDS)
-    assert sent(original) == expected_created_response(connection, committed_user)
-    assert sent(replayed) == sent(original)
+    assert sent_parts(original) == expected_created_response(connection, committed_user)
+    assert sent_parts(replayed) == sent_parts(original)
 
 
 def test_repeat_waits_for_the_first_request_and_creates_if_it_fails(
@@ -455,5 +456,5 @@ def test_repeat_waits_for_the_first_request_and_creates_if_it_fails(
     with waiting_repeat(engine, committed_user) as (first, original, repeat):
         first.rollback()
         created = repeat.result(DEADLINE_SECONDS)
-    assert sent(created) == expected_created_response(connection, committed_user)
-    assert sent(created) != sent(original)
+    assert sent_parts(created) == expected_created_response(connection, committed_user)
+    assert sent_parts(created) != sent_parts(original)

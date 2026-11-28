@@ -93,7 +93,7 @@ def descriptions(node: Any, location: str = "") -> Iterator[tuple[str, str]]:
             yield from descriptions(value, f"{location}/{index}")
 
 
-def expected_problems(path: str, operation: dict[str, Any]) -> set[str]:
+def expected_problem_statuses(path: str, operation: dict[str, Any]) -> set[str]:
     expected = set()
     if VERSIONED_API_PATH.match(path):
         expected.add("403")
@@ -129,7 +129,7 @@ def test_operation_declares_its_responses(
     method: str, path: str, operation: dict[str, Any]
 ) -> None:
     responses = operation["responses"]
-    for status in expected_problems(path, operation):
+    for status in expected_problem_statuses(path, operation):
         assert responses.get(status, {}).get("content") == PROBLEM_CONTENT, status
     if method == "post" and len(segments(path)) == 1:
         created = responses.get("201", {}).get("headers", {})

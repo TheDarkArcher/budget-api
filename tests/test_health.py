@@ -225,7 +225,7 @@ def test_ready_runs_checks_concurrently(app: FastAPI, client: TestClient) -> Non
     assert client.get("/health/ready").status_code == 200
 
 
-def test_unexpected_error_in_a_check_is_not_hidden(
+def test_unexpected_error_in_a_check_returns_internal_error_problem(
     app: FastAPI, client: TestClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     def broken() -> None:
